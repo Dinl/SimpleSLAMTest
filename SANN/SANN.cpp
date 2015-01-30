@@ -17,7 +17,7 @@ public:
 
 	void train(cv::Mat Descriptors);
 	void Match(cv::Mat &Descriptors1, cv::Mat &Descriptors2, std::vector<cv::DMatch> &Matches);
-	std::vector<int> randomDistribution(int N);
+	std::vector<int> randomDistribution(int N, int M);
 	
 
 	SANN();
@@ -67,8 +67,6 @@ void SANN::Match(cv::Mat &Descriptors1, cv::Mat &Descriptors2, std::vector<cv::D
 		Material.at<uchar>(i,2) = -1;
 		Material.at<uchar>(i,3) = -15000;
 	}
-
-
 
 
 }
@@ -132,24 +130,41 @@ void SANN::sortByCol(cv::Mat &src, cv::Mat &dst, int col){
 	Funcion privada de la clase de clasificacion SANN
 	N -> Numero de 
 */
-std::vector<int> SANN::randomDistribution(int N){
+std::vector<int> SANN::randomDistribution(int N, int M){
 	//Crear el vector base y llenarlo
-	std::vector<int> listaBase;
+	std::vector<int> listaBaseEntrenamiento;
 	for(int i=0; i < N; i++)
-		listaBase.push_back(i);
-	
+		listaBaseEntrenamiento.push_back(i);
+
 	//Crear la lista desordenada y llenarla
-	std::vector<int> listaDesordenada;
+	std::vector<int> listaBaseClasificacion;
 	srand (time(NULL));
 	int El = N;
-	for(int i=0; i < N; i++){
+	for(int i=0; i < M; i++){
 		int index = rand() % El;
-		listaDesordenada.push_back(listaBase.at(index));
-		listaBase.erase(listaBase.begin() + index);
+		listaBaseClasificacion.push_back(listaBaseEntrenamiento.at(index));
+		listaBaseEntrenamiento.erase(listaBaseEntrenamiento.begin() + index);
 		El--;
 	}
 
-	return listaDesordenada;
+	//Crear la lista de pareja iniciarla en -1
+	std::vector<int> listaBasePareja;
+	for(int i=0; i < N; i++)
+		listaBasePareja.push_back(-1);
+
+	//Ubicar los indice de la lista de baseClasificacion en la de pareja
+	El = M;
+	for(int i=0; i < M; i++){
+		while(true){
+			int index = rand() % N;
+			if(listaBasePareja.at(index) == -1){
+				listaBasePareja.at(index) = listaBaseClasificacion.at(i);
+				break;
+			}
+		}
+	}
+
+	return listaBasePareja;
 }
 
 int _tmain(int argc, _TCHAR* argv[]){
@@ -220,7 +235,7 @@ int _tmain(int argc, _TCHAR* argv[]){
 	SANN tester;
 	tester.train(source);
 	//tester.sortByCol(source, dst, 1);
-	tester.randomDistribution(10);
+	tester.randomDistribution(100,10);
 
 	
 
