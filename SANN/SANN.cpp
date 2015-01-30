@@ -17,7 +17,7 @@ public:
 
 	void train(cv::Mat Descriptors);
 	void Match(cv::Mat &Descriptors1, cv::Mat &Descriptors2, std::vector<cv::DMatch> &Matches);
-	std::vector<int> randomDistribution(int N, int M);
+	float distance(int N, int M);
 	
 
 	SANN();
@@ -30,15 +30,17 @@ private:
 	cv::Mat Sumas;
 	cv::Mat Medias;
 	cv::Mat Desviaciones;
-	int muestras;
+	int muestrasEntrenamiento, muestrasClasificacion;
 	int caracteristicas;
 
 	void sortByCol(cv::Mat &src, cv::Mat &dst, int col);
+	void randomDistribution(int N, int M);
 	
 };
 
 SANN::SANN(){
-	muestras = 0;
+	muestrasEntrenamiento = 0;
+	muestrasClasificacion = 0;
 	caracteristicas = 0;
 }
 
@@ -53,27 +55,58 @@ void SANN::Match(cv::Mat &Descriptors1, cv::Mat &Descriptors2, std::vector<cv::D
 	else
 		std::cout << "No se puede entrenar, la matriz 1 no contiene muestras o caracteristicas \n";
 
+	if((Descriptors2.rows > 0 && Descriptors2.cols > 0))
+		Descriptors2.copyTo(Descriptores2);
+	else
+		std::cout << "No se puede clasificar, la matriz 2 no contiene muestras o caracteristicas \n";
+
+	if(Descriptors1.cols != Descriptors2.cols)
+		std::cout << "No se puede clasificar, la matriz 1 y la matriz 2 no tienen el mismo numero de caracteristicas \n";
+
+	muestrasClasificacion = Descriptors2.rows;
 	//Crear el material, para optimizar el proceso es una matriz con N filas como Descriptores de entrenamiento
 	//y 4 columnas:
 	//1) Indice de fila de la muestra material de entrenamiento
 	//2) Indice de fila de la muestra a clasificar (Inicialmente aleatorio por principio de diversidad), -1 defecto
 	//3) Indice propuesto de cambio, -1 por defecto
 	//4) Distancia entre las muestras
-	Material = cv::Mat::zeros(muestras, 4, CV_8U);
+	Material = cv::Mat::zeros(muestrasEntrenamiento, 4, CV_32F);
 
-	for(int i=0; i < muestras; i++){
-		Material.at<uchar>(i,0) = i;
-		Material.at<uchar>(i,1) = -1;
-		Material.at<uchar>(i,2) = -1;
-		Material.at<uchar>(i,3) = -15000;
+	for(int i=0; i < muestrasEntrenamiento; i++){
+		Material.at<float>(i,0) = i;
+		Material.at<float>(i,1) = -1;
+		Material.at<float>(i,2) = -1;
+		Material.at<float>(i,3) = -150000;
+	}
+	
+	//Distribuir aleatoriamente las muestras de clasificacion
+	randomDistribution(muestrasEntrenamiento, muestrasClasificacion);
+
+	//Calcular las distancias
+	for(int i=0; i < muestrasEntrenamiento; i++){
+		int indexN = Material.at<float>(i,0);
+		int indexM = Material.at<float>(i,1);
+		if(indexM != -1)
+			Material.at<float>(i,3) = distance(indexN, indexM);
 	}
 
+	//Proponer vector de cambio
+
+
+	std::cout << "\n Material: \n";
+	//Finalmente imprimir el material
+	for(int i=0; i<muestrasEntrenamiento; i++){
+		for(int j=0; j<4; j++)
+			std::cout << Material.at<float>(i,j) << " ";
+		std::cout << "\n";
+	}
+	std::cout << "Fin material \n";
 
 }
 
 void SANN::train(cv::Mat Descriptors){
 	//Hallar el numero de muestras y el numero de caracteristicas
-	muestras = Descriptors.rows;
+	muestrasEntrenamiento = Descriptors.rows;
 	caracteristicas = Descriptors.cols;
 
 	//Declarar las matrices de Sumas y desviaciones
@@ -82,21 +115,21 @@ void SANN::train(cv::Mat Descriptors){
 	Desviaciones = cv::Mat(1,caracteristicas,CV_32FC1,cv::Scalar(0));
 
 	//Hallas las sumas
-	for(int i=0; i<muestras; i++)
+	for(int i=0; i<muestrasEntrenamiento; i++)
 		for(int j=0; j<caracteristicas; j++)
 			Sumas.at<float>(0,j) =  Sumas.at<float>(0,j) + Descriptors.at<float>(i,j);
 
 	//Hallar las medias
 	for(int j=0; j<caracteristicas; j++)
-			Medias.at<float>(0,j) = Sumas.at<float>(0,j) / muestras;
+			Medias.at<float>(0,j) = Sumas.at<float>(0,j) / muestrasEntrenamiento;
 
 	//Hallar las desviaciones estandar
-	for(int i=0; i<muestras; i++)
+	for(int i=0; i<muestrasEntrenamiento; i++)
 		for(int j=0; j<caracteristicas; j++)
 			Desviaciones.at<float>(0,j) =  Desviaciones.at<float>(0,j)  + cv::pow(Descriptors.at<float>(i,j) - Medias.at<float>(0,j), 2);
 	
 	for(int j=0; j<caracteristicas; j++)
-		Desviaciones.at<float>(0,j) = cv::sqrt(Desviaciones.at<float>(0,j) / muestras);
+		Desviaciones.at<float>(0,j) = cv::sqrt(Desviaciones.at<float>(0,j) / muestrasEntrenamiento);
 
 	//Hallar la columna con mayor desviacion estandar
 	int maxDesv = -9999999999, maxDesvIdx = 0;
@@ -126,25 +159,29 @@ void SANN::sortByCol(cv::Mat &src, cv::Mat &dst, int col){
 	sorted.copyTo(dst);
 }
 
-/**
-	Funcion privada de la clase de clasificacion SANN
-	N -> Numero de 
-*/
-std::vector<int> SANN::randomDistribution(int N, int M){
+/*********************************************************************************************
+*	Funcion privada de la clase de clasificacion SANN
+*	N -> Numero de  muestras de entrenamiento
+*	M -> Numero de muestras a clasificar
+*
+*	!IMPORTANTE:  N => M
+*********************************************************************************************/
+void SANN::randomDistribution(int N, int M){
 	//Crear el vector base y llenarlo
 	std::vector<int> listaBaseEntrenamiento;
-	for(int i=0; i < N; i++)
+	for(int i=0; i < M; i++)
 		listaBaseEntrenamiento.push_back(i);
 
 	//Crear la lista desordenada y llenarla
 	std::vector<int> listaBaseClasificacion;
 	srand (time(NULL));
-	int El = N;
+	int El = M;
 	for(int i=0; i < M; i++){
 		int index = rand() % El;
 		listaBaseClasificacion.push_back(listaBaseEntrenamiento.at(index));
 		listaBaseEntrenamiento.erase(listaBaseEntrenamiento.begin() + index);
-		El--;
+		if(!--El)
+			break;
 	}
 
 	//Crear la lista de pareja iniciarla en -1
@@ -164,7 +201,26 @@ std::vector<int> SANN::randomDistribution(int N, int M){
 		}
 	}
 
-	return listaBasePareja;
+	//Finalmente llenar los indices en el Material
+	for(int i=0; i < N; i++)
+		Material.at<float>(i,1) = listaBasePareja.at(i);
+}
+
+/*********************************************************************************************
+*	Funcion privada de la clase de clasificacion SANN
+*	N -> Indice de la muestra de entrenamiento
+*	M -> Indice de la muestra de clasificacion
+*
+*	IMPORTANTE: N,M deben ser valores existentes!
+*********************************************************************************************/
+float SANN::distance(int N, int M){
+	float d = 0;
+	for(int i=0; i<caracteristicas; i++){
+		float  resta = Descriptores1.at<float>(N,i) - Descriptores2.at<float>(M,i);
+		d += std::abs(resta);
+	}
+
+	return d;
 }
 
 int _tmain(int argc, _TCHAR* argv[]){
@@ -195,6 +251,7 @@ int _tmain(int argc, _TCHAR* argv[]){
 	extractor.compute( Imagen2, keypoints_scene2, descriptors_scene2);
 
 	//Metodo match PROPUESTO
+	/*
 	SANN bestMatcher;
 	std::vector< cv::DMatch > matches1;
 	bestMatcher.Match( descriptors_scene1, descriptors_scene2, matches1);
@@ -211,7 +268,7 @@ int _tmain(int argc, _TCHAR* argv[]){
                cv::vector<char>(), cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS );
 	cv::imshow( "Good Matches & Object detection", img_matches );
 	cv::waitKey(0);
-
+	*/
 	/*
 	SANN metodo(caracteristicas);
 	metodo.Entrenar();
@@ -219,33 +276,34 @@ int _tmain(int argc, _TCHAR* argv[]){
 
 
 	//Test de sort
-	cv::Mat source = cv::Mat::zeros(10,10,CV_32F), dst;
-
+	cv::Mat source = cv::Mat::zeros(10,10,CV_32F);
 	for(int i=0; i<10; i++)
 		for(int j=0; j<10; j++)
 			source.at<float>(i,j) = (i-5)*(i-5)*(j-5)*(j-5);
-
-	std::cout << "Original: \n \n";
+	
+	std::cout << "Entrenamiento: \n \n";
 	for(int i=0; i < source.rows; i++){
 		for(int j=0; j < source.cols; j++)
 			std::cout << source.at<float>(i,j) << " ";
 		std::cout << "\n";
 	}
-	
-	SANN tester;
-	tester.train(source);
-	//tester.sortByCol(source, dst, 1);
-	tester.randomDistribution(100,10);
 
-	
+	cv::Mat dst = cv::Mat::zeros(2,10,CV_32F);
+	for(int i=0; i<2; i++)
+		for(int j=0; j<10; j++)
+			dst.at<float>(i,j) = i*i*(j-5)*(j-5);
 
-	std::cout << "Resultado: \n \n";
+	std::cout << "Clasificacion: \n \n";
 	for(int i=0; i < dst.rows; i++){
 		for(int j=0; j < dst.cols; j++)
-			std::cout << dst.at<int>(i,j) << " ";
+			std::cout << dst.at<float>(i,j) << " ";
 		std::cout << "\n";
 	}
 
+	std::vector<cv::DMatch> Matches;
+	
+	SANN tester;
+	tester.Match(source, dst, Matches);
 
 	return 0;
 }
