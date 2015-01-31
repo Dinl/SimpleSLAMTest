@@ -35,6 +35,7 @@ private:
 
 	void sortByCol(cv::Mat &src, cv::Mat &dst, int col);
 	void randomDistribution(int N, int M);
+	void proposeRandomPair();
 	
 };
 
@@ -48,6 +49,12 @@ SANN::~SANN(){
 
 }
 
+/*********************************************************************************************
+*	Funcion privada de la clase de clasificacion SANN
+*	Descriptors1 -> Matriz original con los descriptores de esntrenamiento
+*	Descriptors2 -> Matriz original con los descriptores de clasificacion
+*	Matches		 -> Indices Resultado de match
+*********************************************************************************************/
 void SANN::Match(cv::Mat &Descriptors1, cv::Mat &Descriptors2, std::vector<cv::DMatch> &Matches){
 	//Primero, entrenar con el primer argumento
 	if(Descriptors1.rows > 0 && Descriptors1.cols > 0)
@@ -91,7 +98,7 @@ void SANN::Match(cv::Mat &Descriptors1, cv::Mat &Descriptors2, std::vector<cv::D
 	}
 
 	//Proponer vector de cambio
-
+	proposeRandomPair();
 
 	std::cout << "\n Material: \n";
 	//Finalmente imprimir el material
@@ -104,6 +111,11 @@ void SANN::Match(cv::Mat &Descriptors1, cv::Mat &Descriptors2, std::vector<cv::D
 
 }
 
+/*********************************************************************************************
+*	Funcion privada de la clase de clasificacion SANN
+*	Descriptors -> Matriz original con los descriptores adentro
+*
+*********************************************************************************************/
 void SANN::train(cv::Mat Descriptors){
 	//Hallar el numero de muestras y el numero de caracteristicas
 	muestrasEntrenamiento = Descriptors.rows;
@@ -143,6 +155,13 @@ void SANN::train(cv::Mat Descriptors){
 	sortByCol(Descriptors, Descriptores1, maxDesvIdx);
 }
 
+/*********************************************************************************************
+*	Funcion privada de la clase de clasificacion SANN
+*	src -> Matriz original con las muestras desordenadas
+*	dst -> Matriz resultado ordenada
+*	col -> Indice de la columna que se quiere ordenar
+*
+*********************************************************************************************/
 void SANN::sortByCol(cv::Mat &src, cv::Mat &dst, int col){
 	//Primero hallar el orden de los indices de cada columna
 	cv::Mat idx;
@@ -212,6 +231,7 @@ void SANN::randomDistribution(int N, int M){
 *	M -> Indice de la muestra de clasificacion
 *
 *	IMPORTANTE: N,M deben ser valores existentes!
+*	TODO: Optimizar con absdiff().sum()
 *********************************************************************************************/
 float SANN::distance(int N, int M){
 	float d = 0;
@@ -221,6 +241,47 @@ float SANN::distance(int N, int M){
 	}
 
 	return d;
+}
+
+/*********************************************************************************************
+*	Funcion privada de la clase de clasificacion SANN y metodo principal basado en SA
+*
+*	TODO: Optimizar con absdiff().sum()
+*********************************************************************************************/
+void SANN::proposeRandomPair(){
+
+	//Recorrer el material en busca de particulas a clasificar
+	srand (time(NULL));
+	int El = muestrasEntrenamiento;
+	for(int i=0; i < muestrasEntrenamiento; i++){
+		int indexM = Material.at<float>(i,1);
+		//Si encuentra una particula de clasificacion
+		if(indexM != -1){
+			//Buscar en el espacio de indices propuesto una posibilidad de cambio
+			int indexA = rand() % El;
+			//Se calcula la funcion de costo
+			float d_proposed = distance(indexA,indexM);
+			float d_actual = Material.at<float>(i,3);
+
+			//Si se mejora la funcion de costo
+			if(d_proposed < d_actual){
+				//Si el espacio esta vacio, entonces se pasa la particula a ese espacio
+				if(Material.at<float>(indexA,1) == -1){
+					Material.at<float>(indexA,1) = indexM;
+					Material.at<float>(indexA,3) = d_proposed;
+					Material.at<float>(i,1) = -1;
+					Material.at<float>(i,3) = -1;
+				}
+				//Sino esta vacio, se verifica que la funcion de costo mejore respecto al valor actual
+				else if(d_proposed < Material.at<float>(indexA,3)){
+					Material.at<float>(i,1) = Material.at<float>(indexA,1);
+					Material.at<float>(i,3) = Material.at<float>(indexA,3);					
+					Material.at<float>(indexA,1) = indexM;
+					Material.at<float>(indexA,3) = d_proposed;
+				}
+			}
+		}
+	}
 }
 
 int _tmain(int argc, _TCHAR* argv[]){
@@ -254,9 +315,9 @@ int _tmain(int argc, _TCHAR* argv[]){
 	/*
 	SANN bestMatcher;
 	std::vector< cv::DMatch > matches1;
-	bestMatcher.Match( descriptors_scene1, descriptors_scene2, matches1);
+	bestMatcher.Match( descriptors_scene2, descriptors_scene1, matches1);
 
-
+	
 	//Metodo match SUGERIDO:
 	cv::FlannBasedMatcher matcher;
 	std::vector< cv::DMatch > matches2;
@@ -291,7 +352,7 @@ int _tmain(int argc, _TCHAR* argv[]){
 	cv::Mat dst = cv::Mat::zeros(2,10,CV_32F);
 	for(int i=0; i<2; i++)
 		for(int j=0; j<10; j++)
-			dst.at<float>(i,j) = i*i*(j-5)*(j-5);
+			dst.at<float>(i,j) = (i+1)*(i+1)*(j-5)*(j-5);
 
 	std::cout << "Clasificacion: \n \n";
 	for(int i=0; i < dst.rows; i++){
