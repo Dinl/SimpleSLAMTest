@@ -43,7 +43,10 @@ private:
 	virtual void sortByCol(cv::Mat &src, cv::Mat &dst, int col);
 	virtual void randomDistribution(int N, int M);
 	virtual void proposeRandomPair(float coeff);
-	
+
+	virtual void DEBUG(int m1, int m2, bool print_descriptors);
+	virtual void descriptor1AtRow(int row);
+	virtual void descriptor2AtRow(int row);
 	
 };
 

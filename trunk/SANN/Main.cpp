@@ -38,6 +38,20 @@ int _tmain(int argc, _TCHAR* argv[]){
 	extractor.compute( Imagen1, keypoints_scene1, descriptors_scene1);
 	extractor.compute( Imagen2, keypoints_scene2, descriptors_scene2);
 
+	/*
+	std::cout << "Descriptors 1: \n";
+	for(int i=0; i<descriptors_scene1.rows; i++){
+		for(int j=0; j<descriptors_scene1.cols; j++)
+			std::cout << descriptors_scene1.at<float>(i,j) << " ";
+	std::cout << "\n";
+	}
+	std::cout << "Descriptors 2: \n";
+	for(int i=0; i<descriptors_scene2.rows; i++){
+		for(int j=0; j<descriptors_scene2.cols; j++)
+			std::cout << descriptors_scene2.at<float>(i,j) << " ";
+	std::cout << "\n";
+	}
+	*/
 	//Metodo match PROPUESTO
 	
 	SANN bestMatcher;
