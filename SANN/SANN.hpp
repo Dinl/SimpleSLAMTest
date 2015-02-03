@@ -15,8 +15,8 @@ SANN::~SANN(){
 *
 *	TODO: Agregar una columna de indice cuando se va a entrenar para pasarla al material
 			y no perder la referencia original
-		  Verificar el metodo de indice propuesto, sobretodo cuando es el mismo indice
 		  Agregar el rango dinamico
+		  Hacer que el coeficiente sea adaptativo
 *********************************************************************************************/
 void SANN::Match(cv::Mat &Descriptors1, cv::Mat &Descriptors2, std::vector<cv::DMatch> &Matches){
 	//Primero, entrenar con el primer argumento
@@ -46,7 +46,7 @@ void SANN::Match(cv::Mat &Descriptors1, cv::Mat &Descriptors2, std::vector<cv::D
 		Material.at<float>(i,0) = i;
 		Material.at<float>(i,1) = -1;
 		Material.at<float>(i,2) = -1;
-		Material.at<float>(i,3) = -150000;
+		Material.at<float>(i,3) = 150000;
 	}
 	
 	//Distribuir aleatoriamente las muestras de clasificacion
@@ -61,8 +61,8 @@ void SANN::Match(cv::Mat &Descriptors1, cv::Mat &Descriptors2, std::vector<cv::D
 	}
 
 	//Proponer vector de cambio
-	for(int i=0; i<20; i++){
-		proposeRandomPair(1);
+	for(int i=0; i<100; i++){
+		proposeRandomPair(((100.0-i)/100.0));
 	}
 
 	//Llenar la matriz de Match
@@ -207,9 +207,11 @@ float SANN::distance(int N, int M){
 *	Funcion privada de la clase de clasificacion SANN y metodo principal basado en SA
 *
 *	TODO: Optimizar con absdiff().sum()
+*		Habilitar o deshabilitar debug con variable global
 *********************************************************************************************/
 void SANN::proposeRandomPair(float coeff){
-
+	int Ncambios = 0;
+	int NcambiosAleatorios = 0;
 	//Recorrer el material en busca de particulas a clasificar
 	srand (time(NULL));
 	int El = muestrasEntrenamiento;
@@ -223,25 +225,39 @@ void SANN::proposeRandomPair(float coeff){
 			float d_proposed = distance(indexA,indexM);
 			float d_actual = Material.at<float>(i,3);
 
-			//Si se mejora la funcion de costo
-			if(d_proposed < d_actual){
+			//Se calcula un numero aleatorio entre 0 y 1
+			float aleatorio_unitario = (rand() % 100)/100.0;
+
+			//Si se mejora la funcion de costo o la funcion de probabilidad la acepta
+			if((d_proposed < d_actual || aleatorio_unitario < coeff) && i != indexA){
+				//Para hacer debug, imprimir primero los descriptores propuestos
+				//std::cout << "\n \n Material antes de: \n";
+				//DEBUG(i,indexA,false);
+				if(aleatorio_unitario < coeff) NcambiosAleatorios++;
+
 				//Si el espacio esta vacio, entonces se pasa la particula a ese espacio
 				if(Material.at<float>(indexA,1) == -1){
 					Material.at<float>(indexA,1) = indexM;
 					Material.at<float>(indexA,3) = d_proposed;
 					Material.at<float>(i,1) = -1;
-					Material.at<float>(i,3) = -1;
+					Material.at<float>(i,3) = 150000;
+					Ncambios++;
 				}
 				//Sino esta vacio, se verifica que la funcion de costo mejore respecto al valor actual
-				else if(d_proposed < Material.at<float>(indexA,3)){
+				else if(d_proposed < Material.at<float>(indexA,3) || aleatorio_unitario < coeff){
 					Material.at<float>(i,1) = Material.at<float>(indexA,1);
-					Material.at<float>(i,3) = Material.at<float>(indexA,3);					
+					Material.at<float>(i,3) = distance(Material.at<float>(i,0), Material.at<float>(i,1));					
 					Material.at<float>(indexA,1) = indexM;
 					Material.at<float>(indexA,3) = d_proposed;
+					Ncambios++;
 				}
+
+				//std::cout << "\n Material despues de: \n";
+				//DEBUG(i,indexA,true);
 			}
 		}
 	}
+	std::cout << Ncambios << " " << NcambiosAleatorios << "\n";
 }
 
 /*********************************************************************************************
@@ -256,4 +272,58 @@ void SANN::toString(){
 			std::cout << Material.at<float>(i,j) << " ";
 		std::cout << "\n";
 	}
+}
+
+/*********************************************************************************************
+*	Funcion privada de la clase de clasificacion SANN que imprime el descriptor1 en la muestra
+*	solicitada
+*	
+*	row	->	Fila solicitada
+*
+*********************************************************************************************/
+void SANN::descriptor1AtRow(int row){
+	if(row >= 0){
+		for(int i=0; i<Descriptores1.cols; i++)
+			std::cout << Descriptores1.at<float>(row,i) << " ";
+		std::cout << "\n";
+	}
+}
+
+/*********************************************************************************************
+*	Funcion privada de la clase de clasificacion SANN que imprime el descriptor2 en la muestra
+*	solicitada
+*
+*	row	->	Fila solicitada
+*
+*********************************************************************************************/
+void SANN::descriptor2AtRow(int row){
+	if(row >= 0){
+		for(int i=0; i<Descriptores2.cols; i++)
+			std::cout << Descriptores2.at<float>(row,i) << " ";
+		std::cout << "\n";
+	}
+}
+
+/*********************************************************************************************
+*	Funcion privada de la clase de clasificacion SANN que imprime el rastro DEBUG de los cambios
+*	realizados durante la clasifcacion
+*
+*	m1	->	Primer indice del material
+*	m2	->	Segundo indice del material
+*	print_descriptors	->	Si es true, se imprimen los descriptores de las filas
+*
+*********************************************************************************************/
+void SANN::DEBUG(int m1, int m2, bool print_descriptors){
+
+	std::cout << Material.at<float>(m1,0) << " "<< Material.at<float>(m1,1) << " "<< Material.at<float>(m1,3) <<"\n";
+	std::cout << Material.at<float>(m2,0) << " "<< Material.at<float>(m2,1) << " "<< Material.at<float>(m2,3) <<"\n";
+
+	if(print_descriptors){
+		std::cout << "\n Descriptores usados: \n";
+		descriptor1AtRow(Material.at<float>(m1,0));
+		descriptor2AtRow(Material.at<float>(m1,1));
+		descriptor1AtRow(Material.at<float>(m2,0));
+		descriptor2AtRow(Material.at<float>(m2,1));
+	}
+
 }
