@@ -20,6 +20,7 @@ public:
 
 	virtual void train(cv::Mat Descriptors);
 	virtual void Match(cv::Mat &Descriptors1, cv::Mat &Descriptors2, std::vector<cv::DMatch> &Matches);
+	virtual void toString();
 
 	SANN(){
 		muestrasEntrenamiento = 0;
@@ -42,7 +43,7 @@ private:
 	virtual void sortByCol(cv::Mat &src, cv::Mat &dst, int col);
 	virtual void randomDistribution(int N, int M);
 	virtual void proposeRandomPair(float coeff);
-	virtual void toString();
+	
 	
 };
 

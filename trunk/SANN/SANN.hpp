@@ -61,9 +61,8 @@ void SANN::Match(cv::Mat &Descriptors1, cv::Mat &Descriptors2, std::vector<cv::D
 	}
 
 	//Proponer vector de cambio
-	for(int i=0; i<5; i++){
+	for(int i=0; i<20; i++){
 		proposeRandomPair(1);
-		toString();
 	}
 
 	//Llenar la matriz de Match
