@@ -39,16 +39,22 @@ int _tmain(int argc, _TCHAR* argv[]){
 	extractor.compute( Imagen2, keypoints_scene2, descriptors_scene2);
 
 	//Metodo match PROPUESTO
-	/*
+	
 	SANN bestMatcher;
 	std::vector< cv::DMatch > matches1;
 	bestMatcher.Match( descriptors_scene2, descriptors_scene1, matches1);
-
-	*/
+	bestMatcher.toString();
+	
 	//Metodo match SUGERIDO:
+	/*
 	cv::FlannBasedMatcher matcher;
 	std::vector< cv::DMatch > matches2;
 	matcher.match( descriptors_scene1, descriptors_scene2, matches2 );
+
+	std::cout << "Material: \n \n";
+	for(int i=0; i < matches2.size(); i++){
+		std::cout << matches2[i].queryIdx << " " << matches2[i].trainIdx << " " << matches2[i].distance << "\n";
+	}
 
 	cv::Mat img_matches;
 	cv::drawMatches( Imagen1, keypoints_scene1, Imagen2, keypoints_scene2,
@@ -56,7 +62,7 @@ int _tmain(int argc, _TCHAR* argv[]){
                cv::vector<char>(), cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS );
 	cv::imshow( "Good Matches & Object detection", img_matches );
 	cv::waitKey(0);
-	
+	*/
 	/*
 	SANN metodo(caracteristicas);
 	metodo.Entrenar();
@@ -64,6 +70,7 @@ int _tmain(int argc, _TCHAR* argv[]){
 
 
 	//Test de sort
+	/*
 	cv::Mat source = cv::Mat::zeros(10,10,CV_32F);
 	for(int i=0; i<10; i++)
 		for(int j=0; j<10; j++)
@@ -92,6 +99,6 @@ int _tmain(int argc, _TCHAR* argv[]){
 	
 	SANN tester;
 	tester.Match(source, dst, Matches);
-
+	*/
 	return 0;
 }
