@@ -39,21 +39,22 @@ void SANN::Match(cv::Mat &Descriptors1, cv::Mat &Descriptors2, std::vector<cv::D
 
 	//Calcular las distancias
 	for(int i=0; i < muestrasEntrenamiento; i++){
-		int indexN = Material.at<float>(i,0);
-		int indexM = Material.at<float>(i,1);
-		if(indexM != -1)
-			Material.at<float>(i,3) = distance(indexN, indexM);
+		int indexIM = i;
+		int indexIC = Material.at<float>(i,1);
+		if(indexIC != -1)
+			Material.at<float>(i,2) = distance(indexIM, indexIC);
 	}
 
 	//Proponer vector de cambio
-	for(int i=0; i<100; i++){
+	for(int i=0; i<1000; i++){
 		float coef = std::exp(-i*coeficiente);
 		proposeRandomPair(coef);
 	}
 
 	//Llenar la matriz de Match
 	for(int i=0; i < muestrasEntrenamiento; i++)
-		Matches.push_back(cv::DMatch(Material.at<float>(i,0), Material.at<float>(i,1), Material.at<float>(i,2), Material.at<float>(i,3)));
+		if(Material.at<float>(i,1) != -1 && Material.at<float>(i,2)<0.5)
+			Matches.push_back(cv::DMatch(Material.at<float>(i,0), Material.at<float>(i,1), 0, Material.at<float>(i,2)));
 
 }
 
@@ -61,8 +62,6 @@ void SANN::Match(cv::Mat &Descriptors1, cv::Mat &Descriptors2, std::vector<cv::D
 *	Funcion privada de la clase de clasificacion SANN
 *	Descriptors -> Matriz original con los descriptores adentro
 *
-*	TODO: Agregar una columna de indice cuando se va a entrenar para pasarla al material
-*			y no perder la referencia original
 *********************************************************************************************/
 void SANN::train(cv::Mat Descriptors){
 	//Hallar el numero de muestras y el numero de caracteristicas
@@ -101,17 +100,16 @@ void SANN::train(cv::Mat Descriptors){
 	
 	//Crear el material, para optimizar el proceso es una matriz con N filas como Descriptores de entrenamiento
 	//y 4 columnas:
-	//1) Indice de fila de la muestra material de entrenamiento
-	//2) Indice de fila de la muestra a clasificar (Inicialmente aleatorio por principio de diversidad), -1 defecto
-	//3) Indice propuesto de cambio, -1 por defecto
-	//4) Distancia entre las muestras
-	Material = cv::Mat::zeros(muestrasEntrenamiento, 4, CV_32F);
+	// ) Indice de fila de la muestra material [IM]
+	//0) Indice de fila de la muestra en el descriptor de entrenamiento original [IE]
+	//1) Indice de fila de la muestra en el descriptor de clasificacion original [IC]
+	//2) Distancia entre las muestras [D]
+	Material = cv::Mat::zeros(muestrasEntrenamiento, 3, CV_32F);
 
 	for(int i=0; i < muestrasEntrenamiento; i++){
-		Material.at<float>(i,0) = i;
+		Material.at<float>(i,0) = -1;
 		Material.at<float>(i,1) = -1;
-		Material.at<float>(i,2) = -1;
-		Material.at<float>(i,3) = 150000;
+		Material.at<float>(i,2) = 150000;
 	}
 
 	//Finalmente se ordenan los descriptores por la columna con mayor desviacion
@@ -124,7 +122,6 @@ void SANN::train(cv::Mat Descriptors){
 *	dst -> Matriz resultado ordenada
 *	col -> Indice de la columna que se quiere ordenar
 *	
-*	TODO: El indice original esta en 2, cambiar a 0, y ajustar todas las funciones
 *********************************************************************************************/
 void SANN::sortByCol(cv::Mat &src, cv::Mat &dst, int col){
 	//Primero hallar el orden de los indices de cada columna
@@ -137,7 +134,7 @@ void SANN::sortByCol(cv::Mat &src, cv::Mat &dst, int col){
 	//Se itera y se copia fila por fila
 	for(int i=0; i<sorted.rows; i++){
 		src.row(idx.at<int>(i,col)).copyTo(sorted.row(i));
-		Material.at<float>(i,2) = idx.at<int>(i,col);
+		Material.at<float>(i,0) = idx.at<int>(i,col);
 	}
 
 	//Se copia a la salida
@@ -213,7 +210,7 @@ float SANN::distance(int N, int M){
 *	Funcion privada de la clase de clasificacion SANN y metodo principal basado en SA
 *
 *	TODO: Optimizar con absdiff().sum()
-*		Habilitar o deshabilitar debug con variable global
+*		
 *********************************************************************************************/
 void SANN::proposeRandomPair(float coeff){
 	int Ncambios = 0;
@@ -222,59 +219,65 @@ void SANN::proposeRandomPair(float coeff){
 	srand (time(NULL));
 	int El = muestrasEntrenamiento;
 	for(int i=0; i < muestrasEntrenamiento; i++){
-		int indexM = Material.at<float>(i,1);
+		int indexIC = Material.at<float>(i,1);
 		//Si encuentra una particula de clasificacion
-		if(indexM != -1){
+		if(indexIC != -1){
 			//Buscar en el espacio de indices propuesto una posibilidad de cambio
-			int indexA = rand() % El;
+			int IMAleatorio = rand() % El;
 			//Se calcula la funcion de costo
-			float d_proposed = distance(indexA,indexM);
-			float d_actual = Material.at<float>(i,3);
+			float d_proposed = distance(IMAleatorio,indexIC);
+			float d_actual = Material.at<float>(i,2);
 
 			//Se calcula un numero aleatorio entre 0 y 1
 			float aleatorio_unitario = (rand() % 100)/100.0;
 
 			//Si se mejora la funcion de costo o la funcion de probabilidad la acepta
-			if((d_proposed < d_actual || aleatorio_unitario < coeff) && i != indexA){
+			if((d_proposed < d_actual || aleatorio_unitario < coeff) && i != IMAleatorio){
+				
 				//Para hacer debug, imprimir primero los descriptores propuestos
-				//std::cout << "\n \n Material antes de: \n";
-				//DEBUG(i,indexA,false);
-				if(aleatorio_unitario < coeff) NcambiosAleatorios++;
+				if(doDebug){
+					std::cout << "\n \n Material antes de: \n";
+					DEBUG(i,IMAleatorio,false);
+				}			
 
+				if(aleatorio_unitario < coeff) NcambiosAleatorios++;
 				//Si el espacio esta vacio, entonces se pasa la particula a ese espacio
-				if(Material.at<float>(indexA,1) == -1){
-					Material.at<float>(indexA,1) = indexM;
-					Material.at<float>(indexA,3) = d_proposed;
+				if(Material.at<float>(IMAleatorio,1) == -1){
+					Material.at<float>(IMAleatorio,1) = indexIC;
+					Material.at<float>(IMAleatorio,2) = d_proposed;
 					Material.at<float>(i,1) = -1;
-					Material.at<float>(i,3) = 150000;
+					Material.at<float>(i,2) = 150000;
 					Ncambios++;
 				}
 				//Sino esta vacio, se verifica que la funcion de costo mejore respecto al valor actual
-				else if(d_proposed < Material.at<float>(indexA,3) || aleatorio_unitario < coeff){
-					Material.at<float>(i,1) = Material.at<float>(indexA,1);
-					Material.at<float>(i,3) = distance(Material.at<float>(i,0), Material.at<float>(i,1));					
-					Material.at<float>(indexA,1) = indexM;
-					Material.at<float>(indexA,3) = d_proposed;
+				else if(d_proposed < Material.at<float>(IMAleatorio,2) || aleatorio_unitario < coeff){
+					Material.at<float>(i,1) = Material.at<float>(IMAleatorio,1);
+					Material.at<float>(i,2) = distance(i, Material.at<float>(i,1));					
+					Material.at<float>(IMAleatorio,1) = indexIC;
+					Material.at<float>(IMAleatorio,2) = d_proposed;
 					Ncambios++;
 				}
 
-				//std::cout << "\n Material despues de: \n";
-				//DEBUG(i,indexA,true);
+				//Si se debe hacer debug se imprime el material despues de, y los descriptores afectados
+				if(doDebug){
+					std::cout << "\n Material despues de: \n";
+					DEBUG(i,IMAleatorio,true);
+				}
 			}
 		}
 	}
-	//std::cout << Ncambios << " " << NcambiosAleatorios << " " << distanciaPromedio() <<"\n";
+
+	std::cout << Ncambios << " " << NcambiosAleatorios << " " << distanciaPromedio() << " " << coeff <<"\n";
 }
 
 /*********************************************************************************************
 *	Funcion privada de la clase de clasificacion SANN que imprime el material
 *
-*	TODO: Optimizar con absdiff().sum()
 *********************************************************************************************/
 void SANN::toString(){
 	std::cout << "Material: \n \n";
 	for(int i=0; i < muestrasEntrenamiento; i++){
-		for(int j=0; j < 4; j++)
+		for(int j=0; j < 3; j++)
 			std::cout << Material.at<float>(i,j) << " ";
 		std::cout << "\n";
 	}
@@ -321,14 +324,14 @@ void SANN::descriptor2AtRow(int row){
 *********************************************************************************************/
 void SANN::DEBUG(int m1, int m2, bool print_descriptors){
 
-	std::cout << Material.at<float>(m1,0) << " "<< Material.at<float>(m1,1) << " "<< Material.at<float>(m1,3) <<"\n";
-	std::cout << Material.at<float>(m2,0) << " "<< Material.at<float>(m2,1) << " "<< Material.at<float>(m2,3) <<"\n";
+	std::cout << Material.at<float>(m1,0) << " "<< Material.at<float>(m1,1) << " "<< Material.at<float>(m1,2) <<"\n";
+	std::cout << Material.at<float>(m2,0) << " "<< Material.at<float>(m2,1) << " "<< Material.at<float>(m2,2) <<"\n";
 
 	if(print_descriptors){
 		std::cout << "\n Descriptores usados: \n";
-		descriptor1AtRow(Material.at<float>(m1,0));
+		descriptor1AtRow(m1);
 		descriptor2AtRow(Material.at<float>(m1,1));
-		descriptor1AtRow(Material.at<float>(m2,0));
+		descriptor1AtRow(m2);
 		descriptor2AtRow(Material.at<float>(m2,1));
 	}
 
@@ -343,12 +346,17 @@ float SANN::distanciaPromedio(){
 	float total = 0;
 	
 	for(int i=0; i < muestrasEntrenamiento; i++)
-		if(Material.at<float>(i,3) != 150000)
-			total += Material.at<float>(i,3);
+		if(Material.at<float>(i,2) != 150000)
+			total += Material.at<float>(i,2);
 
 	return total/muestrasEntrenamiento;
 }
 
+/*********************************************************************************************
+*	Funcion publica de la clase de clasificacion SANN que establece el coeficiente para el 
+*	calculo de la temperatura
+*
+*********************************************************************************************/
 void SANN::setCoefficiente(float coeff){
 	coeficiente = coeff;
 }
