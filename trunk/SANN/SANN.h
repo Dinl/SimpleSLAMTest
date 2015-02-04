@@ -18,6 +18,8 @@
 class SANN{
 public:
 
+	bool doDebug;
+
 	virtual void train(cv::Mat Descriptors);
 	virtual void Match(cv::Mat &Descriptors1, cv::Mat &Descriptors2, std::vector<cv::DMatch> &Matches);
 	virtual float distanciaPromedio();
@@ -28,9 +30,8 @@ public:
 		muestrasEntrenamiento = 0;
 		muestrasClasificacion = 0;
 		caracteristicas = 0;
-		coeficiente = 0.51;
-
-
+		coeficiente = 0.82;
+		doDebug = false;
 	}
 	virtual ~SANN();
 

@@ -43,7 +43,7 @@ int _tmain(int argc, _TCHAR* argv[]){
 	SANN bestMatcher;
 	std::vector< cv::DMatch > matches1;
 	bestMatcher.Match(descriptors_scene2, descriptors_scene1, matches1);
-
+	
 	//bestMatcher.toString();
 	
 	//Metodo match SUGERIDO:
@@ -56,14 +56,14 @@ int _tmain(int argc, _TCHAR* argv[]){
 	for(int i=0; i < matches2.size(); i++){
 		std::cout << matches2[i].queryIdx << " " << matches2[i].trainIdx << " " << matches2[i].distance << "\n";
 	}
-
+	*/
 	cv::Mat img_matches;
-	cv::drawMatches( Imagen1, keypoints_scene1, Imagen2, keypoints_scene2,
-               matches2, img_matches, cv::Scalar::all(-1), cv::Scalar::all(-1),
+	cv::drawMatches( Imagen2, keypoints_scene2, Imagen1, keypoints_scene1,
+               matches1, img_matches, cv::Scalar::all(-1), cv::Scalar::all(-1),
                cv::vector<char>(), cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS );
 	cv::imshow( "Good Matches & Object detection", img_matches );
 	cv::waitKey(0);
-	*/
+	
 	/*
 	SANN metodo(caracteristicas);
 	metodo.Entrenar();
