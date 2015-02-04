@@ -13,10 +13,9 @@ SANN::~SANN(){
 *	Descriptors2 -> Matriz original con los descriptores de clasificacion
 *	Matches		 -> Indices Resultado de match
 *
-*	TODO: Agregar una columna de indice cuando se va a entrenar para pasarla al material
-			y no perder la referencia original
-		  Agregar el rango dinamico
-		  Hacer que el coeficiente sea adaptativo
+*	TODO: 
+*		  Agregar el rango dinamico
+*		  Hacer que el coeficiente sea adaptativo
 *********************************************************************************************/
 void SANN::Match(cv::Mat &Descriptors1, cv::Mat &Descriptors2, std::vector<cv::DMatch> &Matches){
 	//Primero, entrenar con el primer argumento
@@ -34,20 +33,6 @@ void SANN::Match(cv::Mat &Descriptors1, cv::Mat &Descriptors2, std::vector<cv::D
 		std::cout << "No se puede clasificar, la matriz 1 y la matriz 2 no tienen el mismo numero de caracteristicas \n";
 
 	muestrasClasificacion = Descriptors2.rows;
-	//Crear el material, para optimizar el proceso es una matriz con N filas como Descriptores de entrenamiento
-	//y 4 columnas:
-	//1) Indice de fila de la muestra material de entrenamiento
-	//2) Indice de fila de la muestra a clasificar (Inicialmente aleatorio por principio de diversidad), -1 defecto
-	//3) Indice propuesto de cambio, -1 por defecto
-	//4) Distancia entre las muestras
-	Material = cv::Mat::zeros(muestrasEntrenamiento, 4, CV_32F);
-
-	for(int i=0; i < muestrasEntrenamiento; i++){
-		Material.at<float>(i,0) = i;
-		Material.at<float>(i,1) = -1;
-		Material.at<float>(i,2) = -1;
-		Material.at<float>(i,3) = 150000;
-	}
 	
 	//Distribuir aleatoriamente las muestras de clasificacion
 	randomDistribution(muestrasEntrenamiento, muestrasClasificacion);
@@ -62,7 +47,8 @@ void SANN::Match(cv::Mat &Descriptors1, cv::Mat &Descriptors2, std::vector<cv::D
 
 	//Proponer vector de cambio
 	for(int i=0; i<100; i++){
-		proposeRandomPair(((100.0-i)/100.0));
+		float coef = std::exp(-i*coeficiente);
+		proposeRandomPair(coef);
 	}
 
 	//Llenar la matriz de Match
@@ -75,6 +61,8 @@ void SANN::Match(cv::Mat &Descriptors1, cv::Mat &Descriptors2, std::vector<cv::D
 *	Funcion privada de la clase de clasificacion SANN
 *	Descriptors -> Matriz original con los descriptores adentro
 *
+*	TODO: Agregar una columna de indice cuando se va a entrenar para pasarla al material
+*			y no perder la referencia original
 *********************************************************************************************/
 void SANN::train(cv::Mat Descriptors){
 	//Hallar el numero de muestras y el numero de caracteristicas
@@ -111,7 +99,22 @@ void SANN::train(cv::Mat Descriptors){
 			maxDesvIdx = i;
 		}
 	
-	//Finalmente ordenar los descriptores por la columna con mayor desviacion
+	//Crear el material, para optimizar el proceso es una matriz con N filas como Descriptores de entrenamiento
+	//y 4 columnas:
+	//1) Indice de fila de la muestra material de entrenamiento
+	//2) Indice de fila de la muestra a clasificar (Inicialmente aleatorio por principio de diversidad), -1 defecto
+	//3) Indice propuesto de cambio, -1 por defecto
+	//4) Distancia entre las muestras
+	Material = cv::Mat::zeros(muestrasEntrenamiento, 4, CV_32F);
+
+	for(int i=0; i < muestrasEntrenamiento; i++){
+		Material.at<float>(i,0) = i;
+		Material.at<float>(i,1) = -1;
+		Material.at<float>(i,2) = -1;
+		Material.at<float>(i,3) = 150000;
+	}
+
+	//Finalmente se ordenan los descriptores por la columna con mayor desviacion
 	sortByCol(Descriptors, Descriptores1, maxDesvIdx);
 }
 
@@ -120,7 +123,8 @@ void SANN::train(cv::Mat Descriptors){
 *	src -> Matriz original con las muestras desordenadas
 *	dst -> Matriz resultado ordenada
 *	col -> Indice de la columna que se quiere ordenar
-*
+*	
+*	TODO: El indice original esta en 2, cambiar a 0, y ajustar todas las funciones
 *********************************************************************************************/
 void SANN::sortByCol(cv::Mat &src, cv::Mat &dst, int col){
 	//Primero hallar el orden de los indices de cada columna
@@ -131,8 +135,10 @@ void SANN::sortByCol(cv::Mat &src, cv::Mat &dst, int col){
 	cv::Mat sorted = cv::Mat::zeros(src.rows,src.cols,src.type());
 
 	//Se itera y se copia fila por fila
-	for(int i=0; i<sorted.rows; i++)
+	for(int i=0; i<sorted.rows; i++){
 		src.row(idx.at<int>(i,col)).copyTo(sorted.row(i));
+		Material.at<float>(i,2) = idx.at<int>(i,col);
+	}
 
 	//Se copia a la salida
 	sorted.copyTo(dst);
@@ -257,7 +263,7 @@ void SANN::proposeRandomPair(float coeff){
 			}
 		}
 	}
-	std::cout << Ncambios << " " << NcambiosAleatorios << "\n";
+	//std::cout << Ncambios << " " << NcambiosAleatorios << " " << distanciaPromedio() <<"\n";
 }
 
 /*********************************************************************************************
@@ -326,4 +332,23 @@ void SANN::DEBUG(int m1, int m2, bool print_descriptors){
 		descriptor2AtRow(Material.at<float>(m2,1));
 	}
 
+}
+
+/*********************************************************************************************
+*	Funcion privada de la clase de clasificacion SANN que calcula la distancia promedio actual
+*	de las particulas con pareja
+*
+*********************************************************************************************/
+float SANN::distanciaPromedio(){
+	float total = 0;
+	
+	for(int i=0; i < muestrasEntrenamiento; i++)
+		if(Material.at<float>(i,3) != 150000)
+			total += Material.at<float>(i,3);
+
+	return total/muestrasEntrenamiento;
+}
+
+void SANN::setCoefficiente(float coeff){
+	coeficiente = coeff;
 }

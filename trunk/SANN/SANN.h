@@ -20,12 +20,17 @@ public:
 
 	virtual void train(cv::Mat Descriptors);
 	virtual void Match(cv::Mat &Descriptors1, cv::Mat &Descriptors2, std::vector<cv::DMatch> &Matches);
+	virtual float distanciaPromedio();
+	virtual void setCoefficiente(float coeff);
 	virtual void toString();
 
 	SANN(){
 		muestrasEntrenamiento = 0;
 		muestrasClasificacion = 0;
 		caracteristicas = 0;
+		coeficiente = 0.51;
+
+
 	}
 	virtual ~SANN();
 
@@ -38,6 +43,7 @@ private:
 	cv::Mat Desviaciones;
 	int muestrasEntrenamiento, muestrasClasificacion;
 	int caracteristicas;
+	float coeficiente;
 
 	virtual float distance(int N, int M);
 	virtual void sortByCol(cv::Mat &src, cv::Mat &dst, int col);
@@ -47,6 +53,7 @@ private:
 	virtual void DEBUG(int m1, int m2, bool print_descriptors);
 	virtual void descriptor1AtRow(int row);
 	virtual void descriptor2AtRow(int row);
+
 	
 };
 
