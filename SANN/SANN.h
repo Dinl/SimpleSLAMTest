@@ -47,7 +47,7 @@ private:
 	float coeficiente;
 
 	virtual float distance(int N, int M);
-	virtual void sortByCol(cv::Mat &src, cv::Mat &dst, int col);
+	virtual void sortByCol(cv::Mat &src, cv::Mat &dst, cv::Mat &col);
 	virtual void randomDistribution(int N, int M);
 	virtual void proposeRandomPair(float coeff);
 
