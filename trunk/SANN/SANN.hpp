@@ -127,25 +127,40 @@ void SANN::train(cv::Mat Descriptors){
 *	
 *********************************************************************************************/
 void SANN::sortByCol(cv::Mat &src, cv::Mat &dst, cv::Mat &col){
-	//Primero hallar el orden de los indices de cada columna
-	cv::Mat idx;
-	cv::sortIdx(src, idx, CV_SORT_EVERY_COLUMN + CV_SORT_ASCENDING);
-
-	//Segundo se crea la matriz de destino igual a la matriz fuente
+	//Primero se crea la matriz de destino igual a la matriz fuente y una temporal
 	cv::Mat sorted = cv::Mat::zeros(src.rows,src.cols,src.type());
+	cv::Mat tmp = cv::Mat::zeros(src.rows,src.cols+1,src.type());
+	cv::Mat tmp_sorted = cv::Mat::zeros(src.rows,src.cols+1,src.type());
 
-	//Imprimir col
-	for(int i=0; i<col.cols; i++)
-		std::cout << col.at<float>(0,i) << "\n";
+	//Segundo se crea la matriz de indice original y se concatena a la original
+	cv::Mat originalIndex = cv::Mat(src.rows, 1, src.type());
+	for(int i=0; i<src.rows; i++)
+		originalIndex.at<float>(i,0) = i;
+	cv::hconcat(src, originalIndex, tmp);
 
-	//Se itera y se copia fila por fila
-	for(int i=0; i<sorted.rows; i++){
-		src.row(idx.at<int>(i,col.at<float>(0,0))).copyTo(sorted.row(i));
-		Material.at<float>(i,0) = idx.at<int>(i,col.at<float>(0,0));
+	//Ordenar para cada columna
+	for(int i=0; i<col.cols; i++){
+		//Determinar cual es la columna que toca ordenar
+		int orderCol = col.at<int>(0,i);
+		std::cout << orderCol << "\n";
+
+		//Despues hallar el orden de los indices de cada columna
+		cv::Mat idx;
+		cv::sortIdx(tmp, idx, CV_SORT_EVERY_COLUMN + CV_SORT_ASCENDING);
+
+		//Se itera y se copia fila por fila
+		for(int k=0; k<sorted.rows; k++){
+			int indiceCopiar = idx.at<int>(k,orderCol);
+			tmp.row(indiceCopiar).copyTo(tmp_sorted.row(k));
+		}
+		//Finalmente se pasa de tmp_sorted a tmp
+		tmp_sorted.copyTo(tmp);
 	}
+	for(int i=0; i<src.rows; i++)
+		Material.at<float>(i,0) = tmp.at<float>(i,64);
 
 	//Se copia a la salida
-	sorted.copyTo(dst);
+	tmp(cvRect(0,0,64,tmp.rows)).copyTo(dst);
 }
 
 /*********************************************************************************************
