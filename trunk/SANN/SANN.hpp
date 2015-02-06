@@ -97,6 +97,9 @@ void SANN::train(cv::Mat Descriptors){
 			maxDesv = Desviaciones.at<float>(0,i);
 			maxDesvIdx = i;
 		}
+
+	cv::Mat idx_caracteristicas;
+	cv::sortIdx(Desviaciones, idx_caracteristicas, CV_SORT_EVERY_ROW + CV_SORT_ASCENDING);
 	
 	//Crear el material, para optimizar el proceso es una matriz con N filas como Descriptores de entrenamiento
 	//y 4 columnas:
@@ -113,7 +116,7 @@ void SANN::train(cv::Mat Descriptors){
 	}
 
 	//Finalmente se ordenan los descriptores por la columna con mayor desviacion
-	sortByCol(Descriptors, Descriptores1, maxDesvIdx);
+	sortByCol(Descriptors, Descriptores1, idx_caracteristicas);
 }
 
 /*********************************************************************************************
@@ -123,7 +126,7 @@ void SANN::train(cv::Mat Descriptors){
 *	col -> Indice de la columna que se quiere ordenar
 *	
 *********************************************************************************************/
-void SANN::sortByCol(cv::Mat &src, cv::Mat &dst, int col){
+void SANN::sortByCol(cv::Mat &src, cv::Mat &dst, cv::Mat &col){
 	//Primero hallar el orden de los indices de cada columna
 	cv::Mat idx;
 	cv::sortIdx(src, idx, CV_SORT_EVERY_COLUMN + CV_SORT_ASCENDING);
@@ -131,10 +134,14 @@ void SANN::sortByCol(cv::Mat &src, cv::Mat &dst, int col){
 	//Segundo se crea la matriz de destino igual a la matriz fuente
 	cv::Mat sorted = cv::Mat::zeros(src.rows,src.cols,src.type());
 
+	//Imprimir col
+	for(int i=0; i<col.cols; i++)
+		std::cout << col.at<float>(0,i) << "\n";
+
 	//Se itera y se copia fila por fila
 	for(int i=0; i<sorted.rows; i++){
-		src.row(idx.at<int>(i,col)).copyTo(sorted.row(i));
-		Material.at<float>(i,0) = idx.at<int>(i,col);
+		src.row(idx.at<int>(i,col.at<float>(0,0))).copyTo(sorted.row(i));
+		Material.at<float>(i,0) = idx.at<int>(i,col.at<float>(0,0));
 	}
 
 	//Se copia a la salida
