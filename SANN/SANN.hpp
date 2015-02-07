@@ -46,14 +46,14 @@ void SANN::Match(cv::Mat &Descriptors1, cv::Mat &Descriptors2, std::vector<cv::D
 	}
 
 	//Proponer vector de cambio
-	for(int i=0; i<1000; i++){
+	for(int i=0; i<500; i++){
 		float coef = std::exp(-i*coeficiente);
 		proposeRandomPair(coef);
 	}
 
 	//Llenar la matriz de Match
 	for(int i=0; i < muestrasEntrenamiento; i++)
-		if(Material.at<float>(i,1) != -1 && Material.at<float>(i,2)<0.5)
+		if(Material.at<float>(i,1) != -1 && Material.at<float>(i,2)<0.75)
 			Matches.push_back(cv::DMatch(Material.at<float>(i,0), Material.at<float>(i,1), 0, Material.at<float>(i,2)));
 
 }
@@ -142,7 +142,6 @@ void SANN::sortByCol(cv::Mat &src, cv::Mat &dst, cv::Mat &col){
 	for(int i=0; i<col.cols; i++){
 		//Determinar cual es la columna que toca ordenar
 		int orderCol = col.at<int>(0,i);
-		std::cout << orderCol << "\n";
 
 		//Despues hallar el orden de los indices de cada columna
 		cv::Mat idx;
@@ -289,7 +288,7 @@ void SANN::proposeRandomPair(float coeff){
 		}
 	}
 
-	std::cout << Ncambios << " " << NcambiosAleatorios << " " << distanciaPromedio() << " " << coeff <<"\n";
+	//std::cout << Ncambios << " " << NcambiosAleatorios << " " << distanciaPromedio() << " " << coeff <<"\n";
 }
 
 /*********************************************************************************************
