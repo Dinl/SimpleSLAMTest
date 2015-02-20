@@ -10,13 +10,81 @@
 #include <opencv2/nonfree/nonfree.hpp>
 
 #include "SANN.hpp";
+#include "alineadorCERES.h";
+
+
+//Variables globales
+cv::Mat Imagen1, Imagen2;
+std::vector<cv::KeyPoint> keypoints_scene1, keypoints_scene2;
+std::vector< cv::DMatch > matches1, matches2;
+
+void MetodoPropuesto(cv::Mat &descriptors_scene1, cv::Mat& descriptors_scene2){
+
+	SANN bestMatcher;
+	bestMatcher.Match(descriptors_scene2, descriptors_scene1, matches1);
+
+
+
+	cv::Mat img_matches1;
+	cv::drawMatches( Imagen2, keypoints_scene2, Imagen1, keypoints_scene1,
+               matches1, img_matches1, cv::Scalar::all(-1), cv::Scalar::all(-1),
+               cv::vector<char>(), cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS );
+	cv::imshow( "Resultado propuesto", img_matches1 );
+	cv::waitKey(0);
+}
+
+void MetodoSugerido(cv::Mat &descriptors_scene1, cv::Mat& descriptors_scene2){
+	cv::FlannBasedMatcher matcher;
+	
+	matcher.match( descriptors_scene1, descriptors_scene2, matches2 );
+
+	//Filtrar
+	std::vector< cv::DMatch > matchesFilter;
+	for(int i=0; i < matches2.size(); i++)
+		if(matches2[i].distance < 0.25)
+			matchesFilter.push_back(matches2[i]);
+
+	//Realizar alineacion
+	ceres::Problem problem;
+	double matriz[9] = {0,0,0,0,0,0,0,0,1};
+
+	for(int i=0; i < matchesFilter.size(); i++){
+		double P1_x = keypoints_scene1[matchesFilter[i].queryIdx].pt.x;
+		double P1_y = keypoints_scene1[matchesFilter[i].queryIdx].pt.y;
+
+		double P2[2];
+		P2[0] = keypoints_scene2[matchesFilter[i].trainIdx].pt.x;
+		P2[1] = keypoints_scene2[matchesFilter[i].trainIdx].pt.y;
+
+		double residuo[2];
+
+		ceres::CostFunction* cost_function = alineadorM9::Create(P1_x, P1_y);
+		problem.AddResidualBlock(cost_function, NULL, matriz, P2);//Pensar mejor
+
+	}
+
+	ceres::Solver::Options options;
+	options.linear_solver_type = ceres::DENSE_SCHUR;
+	options.minimizer_progress_to_stdout = true;
+	ceres::Solver::Summary summary;
+	ceres::Solve(options, &problem, &summary);
+	std::cout << summary.FullReport() << "\n";
+
+
+	cv::Mat img_matches1;
+	cv::drawMatches( Imagen1, keypoints_scene1, Imagen2, keypoints_scene2,
+               matchesFilter, img_matches1, cv::Scalar::all(-1), cv::Scalar::all(-1),
+               cv::vector<char>(), cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS );
+	cv::imshow( "Resultado sugerido", img_matches1 );
+	cv::waitKey(0);
+}
 
 int _tmain(int argc, _TCHAR* argv[]){
 
 	//Datos de prueba
 
-	cv::Mat Imagen1 = cv::imread("cuadro_1_imagen.jpg",CV_LOAD_IMAGE_GRAYSCALE );
-	cv::Mat Imagen2 = cv::imread("cuadro_2_imagen.jpg",CV_LOAD_IMAGE_GRAYSCALE );
+	Imagen1 = cv::imread("cuadro_1_imagen.jpg",CV_LOAD_IMAGE_GRAYSCALE );
+	Imagen2 = cv::imread("cuadro_13_imagen.jpg",CV_LOAD_IMAGE_GRAYSCALE );
 	if(!Imagen1.data || !Imagen2.data){
 		std::cout << "No se puede leer la imagen \n";
 		return 1;
@@ -27,7 +95,7 @@ int _tmain(int argc, _TCHAR* argv[]){
 	cv::SurfFeatureDetector detector( minHessian );
 
 	//Calular los keypoints
-	std::vector<cv::KeyPoint> keypoints_scene1, keypoints_scene2;
+	
 	detector.detect( Imagen1, keypoints_scene1 );
 	detector.detect( Imagen2, keypoints_scene2 );
 	
@@ -39,67 +107,11 @@ int _tmain(int argc, _TCHAR* argv[]){
 	extractor.compute( Imagen2, keypoints_scene2, descriptors_scene2);
 
 	//Metodo match PROPUESTO
-	
-	SANN bestMatcher;
-	std::vector< cv::DMatch > matches1;
-	bestMatcher.Match(descriptors_scene2, descriptors_scene1, matches1);
-	
-	//bestMatcher.toString();
-	
-	//Metodo match SUGERIDO:
-	/*
-	cv::FlannBasedMatcher matcher;
-	std::vector< cv::DMatch > matches2;
-	matcher.match( descriptors_scene1, descriptors_scene2, matches2 );
+	//MetodoPropuesto(descriptors_scene1, descriptors_scene2);
 
-	std::cout << "Material: \n \n";
-	for(int i=0; i < matches2.size(); i++){
-		std::cout << matches2[i].queryIdx << " " << matches2[i].trainIdx << " " << matches2[i].distance << "\n";
-	}
-	*/
-	cv::Mat img_matches;
-	cv::drawMatches( Imagen2, keypoints_scene2, Imagen1, keypoints_scene1,
-               matches1, img_matches, cv::Scalar::all(-1), cv::Scalar::all(-1),
-               cv::vector<char>(), cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS );
-	cv::imshow( "Good Matches & Object detection", img_matches );
-	cv::waitKey(0);
-	
-	/*
-	SANN metodo(caracteristicas);
-	metodo.Entrenar();
-	*/
+	//Metodomatch sugerido
+	MetodoSugerido(descriptors_scene1, descriptors_scene2);
 
 
-	//Test de sort
-	/*
-	cv::Mat source = cv::Mat::zeros(10,10,CV_32F);
-	for(int i=0; i<10; i++)
-		for(int j=0; j<10; j++)
-			source.at<float>(i,j) = (i-5)*(i-5)*(j-5)*(j-5);
-	
-	std::cout << "Entrenamiento: \n \n";
-	for(int i=0; i < source.rows; i++){
-		for(int j=0; j < source.cols; j++)
-			std::cout << source.at<float>(i,j) << " ";
-		std::cout << "\n";
-	}
-
-	cv::Mat dst = cv::Mat::zeros(5,10,CV_32F);
-	for(int i=0; i<2; i++)
-		for(int j=0; j<10; j++)
-			dst.at<float>(i,j) = (i+1)*(i+1)*(j-5)*(j-5);
-
-	std::cout << "Clasificacion: \n \n";
-	for(int i=0; i < dst.rows; i++){
-		for(int j=0; j < dst.cols; j++)
-			std::cout << dst.at<float>(i,j) << " ";
-		std::cout << "\n";
-	}
-
-	std::vector<cv::DMatch> Matches;
-	
-	SANN tester;
-	tester.Match(source, dst, Matches);
-	*/
 	return 0;
 }
