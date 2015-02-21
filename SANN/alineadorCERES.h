@@ -51,6 +51,8 @@ public:
 		T predicted_y = focal * distortion * yp;
 
 		// The error is the difference between the predicted and observed position.
+		//std::cout <<"Px: "<<p[0]<<"\n Py"<<p[1]<<"\n";
+		//std::cout <<"predicted_x "<<predicted_x<<"\n predicted_y"<<predicted_y<<"\n";
 		residuos[0] = predicted_x - T(P1_x);
 		residuos[1] = predicted_y - T(P1_y);
 

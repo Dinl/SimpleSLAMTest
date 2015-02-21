@@ -52,9 +52,10 @@ void MetodoSugerido(cv::Mat &descriptors_scene1, cv::Mat& descriptors_scene2){
 		double P1_x = keypoints_scene1[matchesFilter[i].queryIdx].pt.x;
 		double P1_y = keypoints_scene1[matchesFilter[i].queryIdx].pt.y;
 
-		double P2[2];
+		double P2[3];
 		P2[0] = keypoints_scene2[matchesFilter[i].trainIdx].pt.x;
 		P2[1] = keypoints_scene2[matchesFilter[i].trainIdx].pt.y;
+		P2[2] = 1000;
 
 		double residuo[2];
 
@@ -76,7 +77,23 @@ void MetodoSugerido(cv::Mat &descriptors_scene1, cv::Mat& descriptors_scene2){
                matchesFilter, img_matches1, cv::Scalar::all(-1), cv::Scalar::all(-1),
                cv::vector<char>(), cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS );
 	cv::imshow( "Resultado sugerido", img_matches1 );
+	//cv::waitKey(0);
+
+	//Crear la imagen final
+	//TODO: Mejorar con trasnformacion afin
+	cv::Mat finalImage = cv::Mat(600,800,CV_8UC1, cv::Scalar(0));
+	//Declarar la matriz de transformacion afin
+	cv::Mat affineM = cv::Mat(2,3,CV_32FC1, cv::Scalar(0));
+	affineM.at<uchar>(0,2) = (float)matriz[3];
+	affineM.at<uchar>(1,2) = (float)matriz[4];
+
+	std::cout << "Matriz : " << affineM << "\n";
+	//Imagen1.copyTo(finalImage.rowRange(0,480).colRange(0,640));
+	//Imagen2.copyTo(finalImage.rowRange(0-ty,480-ty).colRange(0-tx,640+tx));
+	cv::transform(Imagen2,finalImage,affineM);
+	cv::imshow( "Resultado traslapado", finalImage );
 	cv::waitKey(0);
+
 }
 
 int _tmain(int argc, _TCHAR* argv[]){
@@ -84,7 +101,7 @@ int _tmain(int argc, _TCHAR* argv[]){
 	//Datos de prueba
 
 	Imagen1 = cv::imread("cuadro_1_imagen.jpg",CV_LOAD_IMAGE_GRAYSCALE );
-	Imagen2 = cv::imread("cuadro_13_imagen.jpg",CV_LOAD_IMAGE_GRAYSCALE );
+	Imagen2 = cv::imread("cuadro_2_imagen.jpg",CV_LOAD_IMAGE_GRAYSCALE );
 	if(!Imagen1.data || !Imagen2.data){
 		std::cout << "No se puede leer la imagen \n";
 		return 1;
