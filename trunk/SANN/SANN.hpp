@@ -94,7 +94,7 @@ void SANN::train(cv::Mat Descriptors){
 	int maxDesv = -9999999999, maxDesvIdx = 0;
 	for(int i=0; i<caracteristicas; i++)
 		if(Desviaciones.at<float>(0,i) > maxDesv){
-			maxDesv = Desviaciones.at<float>(0,i);
+			maxDesv = (int)Desviaciones.at<float>(0,i);
 			maxDesvIdx = i;
 		}
 
@@ -135,7 +135,7 @@ void SANN::sortByCol(cv::Mat &src, cv::Mat &dst, cv::Mat &col){
 	//Segundo se crea la matriz de indice original y se concatena a la original
 	cv::Mat originalIndex = cv::Mat(src.rows, 1, src.type());
 	for(int i=0; i<src.rows; i++)
-		originalIndex.at<float>(i,0) = i;
+		originalIndex.at<float>(i,0) = (float)i;
 	cv::hconcat(src, originalIndex, tmp);
 
 	//Ordenar para cada columna
@@ -206,7 +206,7 @@ void SANN::randomDistribution(int N, int M){
 
 	//Finalmente llenar los indices en el Material
 	for(int i=0; i < N; i++)
-		Material.at<float>(i,1) = listaBasePareja.at(i);
+		Material.at<float>(i,1) = (float)listaBasePareja.at(i);
 }
 
 /*********************************************************************************************
@@ -264,7 +264,7 @@ void SANN::proposeRandomPair(float coeff){
 				if(aleatorio_unitario < coeff) NcambiosAleatorios++;
 				//Si el espacio esta vacio, entonces se pasa la particula a ese espacio
 				if(Material.at<float>(IMAleatorio,1) == -1){
-					Material.at<float>(IMAleatorio,1) = indexIC;
+					Material.at<float>(IMAleatorio,1) = (float)indexIC;
 					Material.at<float>(IMAleatorio,2) = d_proposed;
 					Material.at<float>(i,1) = -1;
 					Material.at<float>(i,2) = 150000;
@@ -274,7 +274,7 @@ void SANN::proposeRandomPair(float coeff){
 				else if(d_proposed < Material.at<float>(IMAleatorio,2) || aleatorio_unitario < coeff){
 					Material.at<float>(i,1) = Material.at<float>(IMAleatorio,1);
 					Material.at<float>(i,2) = distance(i, Material.at<float>(i,1));					
-					Material.at<float>(IMAleatorio,1) = indexIC;
+					Material.at<float>(IMAleatorio,1) = (float)indexIC;
 					Material.at<float>(IMAleatorio,2) = d_proposed;
 					Ncambios++;
 				}
