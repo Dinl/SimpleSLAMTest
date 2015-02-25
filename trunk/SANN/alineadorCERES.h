@@ -89,11 +89,53 @@ public:
 		Rt[3][2] = T(0.);
 		Rt[3][3] = T(1.);
 
+		/*
+		std::cout << "\n ************ \n";
+		std::cout << " "<<Rt[0][0]<<"  "<<Rt[0][1]<<"  "<<Rt[0][2]<<"  "<<Rt[0][3]<<"\n";
+		std::cout << " "<<Rt[1][0]<<"  "<<Rt[1][1]<<"  "<<Rt[1][2]<<"  "<<Rt[1][3]<<"\n"; 
+		std::cout << " "<<Rt[2][0]<<"  "<<Rt[2][1]<<"  "<<Rt[2][2]<<"  "<<Rt[2][3]<<"\n"; 
+		std::cout << " "<<Rt[3][0]<<"  "<<Rt[3][1]<<"  "<<Rt[3][2]<<"  "<<Rt[3][3]<<"\n"; 
+		std::cout << "\n ************ \n";
+		*/
+
+		//Obtener el punto original
+		T point3D[4];
+		point3D[2] = punto[0];
+		point3D[2] = punto[1];
+		point3D[2] = punto[2];
+		point3D[2] = T(1.0);
+
+		//Obtener el punto transformado
+		T transformedPoint3D[4];
+		transformedPoint3D[0] = Rt[0][0]*point3D[0]+Rt[0][1]*point3D[1]+Rt[0][2]*point3D[2]+Rt[0][3]*point3D[3];
+        transformedPoint3D[1] = Rt[1][0]*point3D[0]+Rt[1][1]*point3D[1]+Rt[1][2]*point3D[2]+Rt[1][3]*point3D[3];
+        transformedPoint3D[2] = Rt[2][0]*point3D[0]+Rt[2][1]*point3D[1]+Rt[2][2]*point3D[2]+Rt[2][3]*point3D[3];
+        transformedPoint3D[3] = Rt[3][0]*point3D[0]+Rt[3][1]*point3D[1]+Rt[3][2]*point3D[2]+Rt[3][3]*point3D[3];
+
+		if(transformedPoint3D[3] != T(0.0)){
+			transformedPoint3D[0] = transformedPoint3D[0] / transformedPoint3D[3];
+			transformedPoint3D[1] = transformedPoint3D[1] / transformedPoint3D[3];
+			transformedPoint3D[2] = transformedPoint3D[2] / transformedPoint3D[3];
+			transformedPoint3D[3] = transformedPoint3D[3] / transformedPoint3D[3];
+		}
+
+		//Obtener la distancia residual
+		residuos[0] = ceres::abs(transformedPoint3D[0] - T(P1_x));
+		residuos[1] = ceres::abs(transformedPoint3D[1] - T(P1_y));
+		residuos[2] = ceres::abs(transformedPoint3D[2] - T(P1_z));
+
+		/*
+		std::cout << "\n ************ \n";
+		std::cout << "X: "<<transformedPoint3D[0]<<" Y:"<<transformedPoint3D[1]<<" Z:"<<transformedPoint3D[2]<<" 1:"<<transformedPoint3D[3]<<"\n"; 
+		std::cout << "X: "<<P1_x<<" Y:"<<P1_y<<" Z:"<<P1_z<<"\n"; 
+		std::cout << "X: "<<residuos[0]<<" Y:"<<residuos[1]<<" Z:"<<residuos[2]<<"\n"; 
+		std::cout << "\n ************ \n";
+		*/
 		return true;
 	}
 
-	static ceres::CostFunction* Create(const double observed_x, const double observed_y, , const double observed_Z) {
-		return (new ceres::AutoDiffCostFunction<alineadorM9, 2, 9, 3>(new alineadorM9(observed_x, observed_y, observed_Z)));
+	static ceres::CostFunction* Create(const double observed_x, const double observed_y, const double observed_Z) {
+		return (new ceres::AutoDiffCostFunction<alineadorM9, 3, 6, 3>(new alineadorM9(observed_x, observed_y, observed_Z)));
 	}
 
 private:
