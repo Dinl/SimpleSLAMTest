@@ -12,12 +12,13 @@
 
 #include <pcl/io/pcd_io.h>
 //TODO: Solucionar ambiguedades para que sea compatible con ceres
-//#include <pcl/visualization/pcl_visualizer.h>
-//#include <pcl/visualization/cloud_viewer.h>
+#include <pcl/visualization/pcl_visualizer.h>
+#include <pcl/visualization/cloud_viewer.h>
 
 #include <pcl/visualization/boost.h>
 #include <pcl/console/print.h>
 #include <pcl/filters/filter.h>
+#include <pcl/common/transforms.h>
 
 #include "SANN.hpp";
 #include "alineadorCERES.h";
@@ -30,7 +31,12 @@ typedef pcl::PointCloud<PointT> PointCloudT;
 cv::Mat Imagen1, Imagen2;
 std::vector<cv::KeyPoint> keypoints_scene1, keypoints_scene2;
 pcl::PointCloud<PointT>::ConstPtr cloud_scene1, cloud_scene2;
+pcl::PointCloud<PointT>::ConstPtr scene2transformed;
+
+
 std::vector< cv::DMatch > matches;
+
+float Rt[4][4];
 
 void MetodoPropuesto(cv::Mat &descriptors_scene1, cv::Mat& descriptors_scene2){
 
@@ -56,7 +62,7 @@ void MetodoSugerido(cv::Mat &descriptors_scene1, cv::Mat& descriptors_scene2){
 	//Filtrar
 	
 	for(int i=0; i < matchesFilter.size(); i++)
-		if(matchesFilter[i].distance < 0.05)
+		if(matchesFilter[i].distance < 0.50)
 			matches.push_back(matchesFilter[i]);
 
 	cv::Mat img_matches1;
@@ -65,6 +71,46 @@ void MetodoSugerido(cv::Mat &descriptors_scene1, cv::Mat& descriptors_scene2){
                cv::vector<char>(), cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS );
 	cv::imshow( "Resultado sugerido", img_matches1 );
 	cv::waitKey(0);
+}
+
+void imprimirMatriz(double *M){
+	float x = M[0];
+	float y = M[1];
+	float z = M[2];
+	float yaw = M[3];
+	float pitch = M[4];
+	float roll = M[5];
+
+	float sin_yaw = ceres::sin(yaw);
+	float cos_yaw = ceres::cos(yaw);
+	float sin_pitch = ceres::sin(pitch);
+	float cos_pitch = ceres::cos(pitch);
+	float sin_roll = ceres::sin(roll);
+	float cos_roll = ceres::cos(roll);
+
+	Rt[0][0] = cos_yaw * cos_pitch;
+	Rt[0][1] = cos_yaw * sin_pitch * sin_roll - sin_yaw * cos_roll;
+	Rt[0][2] = cos_yaw * sin_pitch * cos_roll + sin_yaw * sin_roll;
+	Rt[0][3] = x;
+	Rt[1][0] = sin_yaw * cos_pitch;
+	Rt[1][1] = sin_yaw * sin_pitch * sin_roll + cos_yaw * cos_roll;
+	Rt[1][2] = sin_yaw * sin_pitch * cos_roll - cos_yaw * sin_roll;
+	Rt[1][3] = y;
+	Rt[2][0] = -sin_pitch;
+	Rt[2][1] = cos_pitch * sin_roll;
+	Rt[2][2] = cos_pitch * cos_roll;
+	Rt[2][3] = z;
+	Rt[3][0] = 0.0;
+	Rt[3][1] = 0.0;
+	Rt[3][2] = 0.0;
+	Rt[3][3] = 1.0;
+
+	std::cout << "\n ************ \n";
+	std::cout << " "<<Rt[0][0]<<"  "<<Rt[0][1]<<"  "<<Rt[0][2]<<"  "<<Rt[0][3]<<"\n";
+	std::cout << " "<<Rt[1][0]<<"  "<<Rt[1][1]<<"  "<<Rt[1][2]<<"  "<<Rt[1][3]<<"\n"; 
+	std::cout << " "<<Rt[2][0]<<"  "<<Rt[2][1]<<"  "<<Rt[2][2]<<"  "<<Rt[2][3]<<"\n"; 
+	std::cout << " "<<Rt[3][0]<<"  "<<Rt[3][1]<<"  "<<Rt[3][2]<<"  "<<Rt[3][3]<<"\n"; 
+	std::cout << "\n ************ \n";
 }
 
 void alinearCeres(){
@@ -108,7 +154,8 @@ void alinearCeres(){
 
 		double residuo[3];
 
-		if(C1[0] == C1[0] && C2[0] == C2[0]){
+		if(C1[0] == C1[0] && C1[1] == C1[1] && C1[2] == C1[2] && 
+			C2[0] == C2[0] && C2[1] == C2[1] && C2[2] == C2[2]){
 			ceres::CostFunction* cost_function = alineadorM9::Create(C1[0], C1[1], C1[2]);
 			problem.AddResidualBlock(cost_function, NULL, matriz, C2);//Pensar mejor
 		}
@@ -117,29 +164,74 @@ void alinearCeres(){
 
 	ceres::Solver::Options options;
 	options.max_num_iterations = 100;				//Por definir
-	options.linear_solver_type = ceres::ITERATIVE_SCHUR;
+	options.linear_solver_type = ceres::DENSE_NORMAL_CHOLESKY;
 	options.minimizer_progress_to_stdout = true;
-	//options.parameter_tolerance = 0.0000000000000000000000000000000001;
 	ceres::Solver::Summary summary;
 	ceres::Solve(options, &problem, &summary);
 	std::cout << summary.FullReport() << "\n";
 
 	std::cout << matriz[0] << " " << matriz[1] << " " << matriz[2] << " " << matriz[3] << " " << matriz[4] << " " << matriz[5] << "\n";
+	imprimirMatriz(matriz);
 
-	//Crear la imagen final
-	//TODO: Mejorar con trasnformacion afin
-	cv::Mat finalImage = cv::Mat(600,800,CV_8UC1, cv::Scalar(0));
-	//Declarar la matriz de transformacion afin
-	cv::Mat affineM = cv::Mat(2,3,CV_32FC1, cv::Scalar(0));
-	affineM.at<uchar>(0,2) = (uchar)((float)matriz[3]);
-	affineM.at<uchar>(1,2) = (uchar)((float)matriz[4]);
+	//Aplicar la transformacion de la nube
+	
+	Eigen::Matrix4f transform_1 = Eigen::Matrix4f::Identity();
 
-	std::cout << "Matriz : " << affineM << "\n";
-	//Imagen1.copyTo(finalImage.rowRange(0,480).colRange(0,640));
-	//Imagen2.copyTo(finalImage.rowRange(0-ty,480-ty).colRange(0-tx,640+tx));
-	cv::transform(Imagen2,finalImage,affineM);
-	cv::imshow( "Resultado traslapado", finalImage );
-	cv::waitKey(0);
+	transform_1 (0,0) = Rt[0][0];
+	transform_1 (0,1) = Rt[0][1];
+	transform_1 (0,2) = Rt[0][2];
+	transform_1 (0,3) = Rt[0][3];
+
+	transform_1 (1,0) = Rt[1][0];
+	transform_1 (1,1) = Rt[1][1];
+	transform_1 (1,2) = Rt[1][2];
+	transform_1 (1,3) = Rt[1][3];
+
+	transform_1 (2,0) = Rt[2][0];
+	transform_1 (2,1) = Rt[2][1];
+	transform_1 (2,2) = Rt[2][2];
+	transform_1 (2,3) = Rt[2][3];
+
+	transform_1 (3,0) = Rt[3][0];
+	transform_1 (3,1) = Rt[3][1];
+	transform_1 (3,2) = Rt[3][2];
+	transform_1 (3,3) = Rt[3][3];
+	
+	pcl::PointCloud<PointT>::Ptr scene1(new pcl::PointCloud<PointT>);
+	pcl::PointCloud<PointT>::Ptr scene2(new pcl::PointCloud<PointT>);
+	pcl::PointCloud<PointT>::Ptr sceneSum(new pcl::PointCloud<PointT>);
+	pcl::PointCloud<PointT>::Ptr sceneT(new pcl::PointCloud<PointT>);
+	pcl::PointCloud<PointT>::Ptr sceneTSum(new pcl::PointCloud<PointT>);
+
+	*scene1 = *cloud_scene1;
+	*scene2 = *cloud_scene2;
+	*sceneT = *scene2transformed;
+	
+	pcl::transformPointCloud (*scene2, *sceneT, transform_1);
+
+	*sceneSum = *scene1 + *scene2;
+	*sceneTSum = *scene1 + *sceneT;
+
+	//Mostrar la nube transformada
+	boost::shared_ptr<pcl::visualization::PCLVisualizer> v (new pcl::visualization::PCLVisualizer("OpenNI viewer"));
+	
+	int v1(0);
+	v->createViewPort(0.0,0.0,0.5,1.0,v1);
+	v->setBackgroundColor(0,0,0,v1);
+	v->addPointCloud(sceneSum, "sample cloud1", v1);
+
+	int v2(0);
+	v->createViewPort(0.5, 0.0, 1.0, 1.0, v2);
+	v->setBackgroundColor(0,0,0,v2);
+	v->addPointCloud(sceneTSum, "sample cloud2", v2);
+
+	while(!v->wasStopped()){
+		v->spinOnce (100);
+		boost::this_thread::sleep (boost::posix_time::microseconds (100000));
+	}
+
+
+	std::cout << "transformed \n";
 
 }
 
@@ -147,23 +239,25 @@ int _tmain(int argc, _TCHAR* argv[]){
 
 	//Cargar datos de prueba imagenes
 	Imagen1 = cv::imread("cuadro_1_imagen_grises.jpg",CV_LOAD_IMAGE_GRAYSCALE );
-	Imagen2 = cv::imread("cuadro_13_imagen_grises.jpg",CV_LOAD_IMAGE_GRAYSCALE );
+	Imagen2 = cv::imread("cuadro_5_imagen_grises.jpg",CV_LOAD_IMAGE_GRAYSCALE );
 	if(!Imagen1.data || !Imagen2.data){
 		std::cout << "No se puede leer la imagen \n";
 		return 1;
 	}
 
 	//Cargar datos de prueba nube
-	pcl::PointCloud<PointT>::Ptr tmpscene1(new pcl::PointCloud<pcl::PointXYZRGBA>);
-	pcl::PointCloud<PointT>::Ptr tmpscene2(new pcl::PointCloud<pcl::PointXYZRGBA>);
+	pcl::PointCloud<PointT>::Ptr tmpscene1(new pcl::PointCloud<PointT>);
+	pcl::PointCloud<PointT>::Ptr tmpscene2(new pcl::PointCloud<PointT>);
+	pcl::PointCloud<PointT>::Ptr tmpscene3(new pcl::PointCloud<PointT>);
 
 	if(pcl::io::loadPCDFile<PointT>("cuadro_1_nube.pcd",*tmpscene1) != 0
-		|| pcl::io::loadPCDFile<PointT>("cuadro_13_nube.pcd",*tmpscene2) != 0){
+		|| pcl::io::loadPCDFile<PointT>("cuadro_5_nube.pcd",*tmpscene2) != 0){
 		PCL_ERROR("Problem reading clouds \n");
 		return 1;
 	}
 	cloud_scene1 = tmpscene1;
 	cloud_scene2 = tmpscene2;
+	scene2transformed = tmpscene3;
 
 	//Crear el objeto SURF
 	int minHessian = 400;
