@@ -100,10 +100,10 @@ public:
 
 		//Obtener el punto original
 		T point3D[4];
-		point3D[2] = punto[0];
-		point3D[2] = punto[1];
+		point3D[0] = punto[0];
+		point3D[1] = punto[1];
 		point3D[2] = punto[2];
-		point3D[2] = T(1.0);
+		point3D[3] = T(1.0);
 
 		//Obtener el punto transformado
 		T transformedPoint3D[4];
@@ -131,6 +131,7 @@ public:
 		std::cout << "X: "<<residuos[0]<<" Y:"<<residuos[1]<<" Z:"<<residuos[2]<<"\n"; 
 		std::cout << "\n ************ \n";
 		*/
+
 		return true;
 	}
 
