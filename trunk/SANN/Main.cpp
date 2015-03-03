@@ -11,7 +11,6 @@
 
 
 #include <pcl/io/pcd_io.h>
-//TODO: Solucionar ambiguedades para que sea compatible con ceres
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl/visualization/cloud_viewer.h>
 
@@ -41,12 +40,12 @@ float Rt[4][4];
 void MetodoPropuesto(cv::Mat &descriptors_scene1, cv::Mat& descriptors_scene2){
 
 	SANN bestMatcher;
-	bestMatcher.Match(descriptors_scene2, descriptors_scene1, matches);
+	bestMatcher.Match(descriptors_scene1, descriptors_scene2, matches);
 
 
 
 	cv::Mat img_matches1;
-	cv::drawMatches( Imagen2, keypoints_scene2, Imagen1, keypoints_scene1,
+	cv::drawMatches( Imagen1, keypoints_scene1, Imagen2, keypoints_scene2,
                matches, img_matches1, cv::Scalar::all(-1), cv::Scalar::all(-1),
                cv::vector<char>(), cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS );
 	cv::imshow( "Resultado propuesto", img_matches1 );
@@ -62,7 +61,7 @@ void MetodoSugerido(cv::Mat &descriptors_scene1, cv::Mat& descriptors_scene2){
 	//Filtrar
 	
 	for(int i=0; i < matchesFilter.size(); i++)
-		if(matchesFilter[i].distance < 0.50)
+		if(matchesFilter[i].distance < 0.150)
 			matches.push_back(matchesFilter[i]);
 
 	cv::Mat img_matches1;
@@ -114,6 +113,28 @@ void imprimirMatriz(double *M){
 }
 
 void alinearCeres(){
+
+	//Mostrar la nube transformada
+	boost::shared_ptr<pcl::visualization::PCLVisualizer> v (new pcl::visualization::PCLVisualizer("OpenNI viewer"));
+
+	//Crear las nubes de puntos originales
+	pcl::PointCloud<PointT>::Ptr scene1(new pcl::PointCloud<PointT>);
+	pcl::PointCloud<PointT>::Ptr scene2(new pcl::PointCloud<PointT>);
+	pcl::PointCloud<PointT>::Ptr sceneSum(new pcl::PointCloud<PointT>);
+	pcl::PointCloud<PointT>::Ptr sceneT(new pcl::PointCloud<PointT>);
+	pcl::PointCloud<PointT>::Ptr sceneTSum(new pcl::PointCloud<PointT>);
+
+	*scene1 = *cloud_scene1;
+	*scene2 = *cloud_scene2;
+	*sceneT = *scene2transformed;
+	*sceneSum = *scene1 + *scene2;
+
+	//Crear el primer viewport
+	int v1(0);
+	v->createViewPort(0.0,0.0,0.5,1.0,v1);
+	v->setBackgroundColor(0,0,0,v1);
+	v->addPointCloud(scene1, "sample cloud1", v1);
+
 	//Realizar alineacion
 	ceres::Problem problem;
 
@@ -136,9 +157,14 @@ void alinearCeres(){
 		double indiceP1 = ((Imagen1.cols * (P1[1]-1)) + P1[0]);
 		//Obtener el correspondiente punto en la nube
 		double C1[3];
-		C1[0] = cloud_scene1->at(indiceP1).x;
-		C1[1] = cloud_scene1->at(indiceP1).y;
-		C1[2] = cloud_scene1->at(indiceP1).z;
+		C1[0] = cloud_scene1->at(P1[0],P1[1]).x;
+		C1[1] = cloud_scene1->at(P1[0],P1[1]).y;
+		C1[2] = cloud_scene1->at(P1[0],P1[1]).z;
+
+		//Mostrar esferas en el lugar de los keypoints
+		std::string sphereid = "sphere"+std::to_string(i);
+		v->addSphere(cloud_scene1->at(P1[0],P1[1]),0.01,255,0,0,sphereid,v1);
+
 		/**********************************************************************/
 		//Obtener el punto en la imagen destino
 		double P2[2];
@@ -148,14 +174,23 @@ void alinearCeres(){
 		double indiceP2 = ((Imagen2.cols * (P2[1]-1)) + P2[0]);
 		//Obtener el correspondiente punto en la nube
 		double C2[3];
-		C2[0] = cloud_scene2->at(indiceP2).x;
-		C2[1] = cloud_scene2->at(indiceP2).y;
-		C2[2] = cloud_scene2->at(indiceP2).z;
+		C2[0] = cloud_scene2->at(P2[0],P2[1]).x;
+		C2[1] = cloud_scene2->at(P2[0],P2[1]).y;
+		C2[2] = cloud_scene2->at(P2[0],P2[1]).z;
 
 		double residuo[3];
 
+		/**Imprimir los 2 puntos espaciales**/
+		/*
+		std::cout<< "punto" << i << " : \n";
+		std::cout << "Po: " << P1[0] << " " << P1[1] << " Pd: " << P2[0] << " " << P2[1] << "\n";
+		std::cout << "Po: " << C1[0] << " " << C1[1] << " " << C1[2] << " Pd: " << C2[0] << " " << C2[1] << " " << C2[2] << "\n";
+		*/
 		if(C1[0] == C1[0] && C1[1] == C1[1] && C1[2] == C1[2] && 
 			C2[0] == C2[0] && C2[1] == C2[1] && C2[2] == C2[2]){
+
+
+
 			ceres::CostFunction* cost_function = alineadorM9::Create(C1[0], C1[1], C1[2]);
 			problem.AddResidualBlock(cost_function, NULL, matriz, C2);//Pensar mejor
 		}
@@ -164,7 +199,7 @@ void alinearCeres(){
 
 	ceres::Solver::Options options;
 	options.max_num_iterations = 100;				//Por definir
-	options.linear_solver_type = ceres::DENSE_NORMAL_CHOLESKY;
+	options.linear_solver_type = ceres::DENSE_SCHUR;
 	options.minimizer_progress_to_stdout = true;
 	ceres::Solver::Summary summary;
 	ceres::Solve(options, &problem, &summary);
@@ -197,28 +232,8 @@ void alinearCeres(){
 	transform_1 (3,2) = Rt[3][2];
 	transform_1 (3,3) = Rt[3][3];
 	
-	pcl::PointCloud<PointT>::Ptr scene1(new pcl::PointCloud<PointT>);
-	pcl::PointCloud<PointT>::Ptr scene2(new pcl::PointCloud<PointT>);
-	pcl::PointCloud<PointT>::Ptr sceneSum(new pcl::PointCloud<PointT>);
-	pcl::PointCloud<PointT>::Ptr sceneT(new pcl::PointCloud<PointT>);
-	pcl::PointCloud<PointT>::Ptr sceneTSum(new pcl::PointCloud<PointT>);
-
-	*scene1 = *cloud_scene1;
-	*scene2 = *cloud_scene2;
-	*sceneT = *scene2transformed;
-	
-	pcl::transformPointCloud (*scene2, *sceneT, transform_1);
-
-	*sceneSum = *scene1 + *scene2;
-	*sceneTSum = *scene1 + *sceneT;
-
-	//Mostrar la nube transformada
-	boost::shared_ptr<pcl::visualization::PCLVisualizer> v (new pcl::visualization::PCLVisualizer("OpenNI viewer"));
-	
-	int v1(0);
-	v->createViewPort(0.0,0.0,0.5,1.0,v1);
-	v->setBackgroundColor(0,0,0,v1);
-	v->addPointCloud(sceneSum, "sample cloud1", v1);
+	pcl::transformPointCloud (*scene1, *sceneT, transform_1);
+	*sceneTSum = *scene2 + *sceneT;
 
 	int v2(0);
 	v->createViewPort(0.5, 0.0, 1.0, 1.0, v2);
