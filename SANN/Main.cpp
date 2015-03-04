@@ -61,7 +61,7 @@ void MetodoSugerido(cv::Mat &descriptors_scene1, cv::Mat& descriptors_scene2){
 	//Filtrar
 	
 	for(int i=0; i < matchesFilter.size(); i++)
-		if(matchesFilter[i].distance < 0.150)
+		if(matchesFilter[i].distance < 0.100)
 			matches.push_back(matchesFilter[i]);
 
 	cv::Mat img_matches1;
@@ -162,8 +162,8 @@ void alinearCeres(){
 		C1[2] = cloud_scene1->at(P1[0],P1[1]).z;
 
 		//Mostrar esferas en el lugar de los keypoints
-		std::string sphereid = "sphere"+std::to_string(i);
-		v->addSphere(cloud_scene1->at(P1[0],P1[1]),0.01,255,0,0,sphereid,v1);
+		//std::string sphereid = "sphere"+std::to_string(i);
+		//v->addSphere(cloud_scene1->at(P1[0],P1[1]),0.01,255,0,0,sphereid,v1);
 
 		/**********************************************************************/
 		//Obtener el punto en la imagen destino
@@ -188,9 +188,6 @@ void alinearCeres(){
 		*/
 		if(C1[0] == C1[0] && C1[1] == C1[1] && C1[2] == C1[2] && 
 			C2[0] == C2[0] && C2[1] == C2[1] && C2[2] == C2[2]){
-
-
-
 			ceres::CostFunction* cost_function = alineadorM9::Create(C1[0], C1[1], C1[2]);
 			problem.AddResidualBlock(cost_function, NULL, matriz, C2);//Pensar mejor
 		}
@@ -199,8 +196,15 @@ void alinearCeres(){
 
 	ceres::Solver::Options options;
 	options.max_num_iterations = 100;				//Por definir
-	options.linear_solver_type = ceres::DENSE_SCHUR;
-	options.minimizer_progress_to_stdout = true;
+	options.linear_solver_type = ceres::DENSE_NORMAL_CHOLESKY;
+	options.minimizer_progress_to_stdout = false;
+	options.function_tolerance = 1e-6;
+	options.gradient_tolerance = 1e-6;
+	options.parameter_tolerance = 1e-6;
+	options.initial_trust_region_radius = 1e-4;
+	options.max_trust_region_radius = 1e8;
+	options.min_trust_region_radius = 1e-32;
+
 	ceres::Solver::Summary summary;
 	ceres::Solve(options, &problem, &summary);
 	std::cout << summary.FullReport() << "\n";
@@ -232,8 +236,8 @@ void alinearCeres(){
 	transform_1 (3,2) = Rt[3][2];
 	transform_1 (3,3) = Rt[3][3];
 	
-	pcl::transformPointCloud (*scene1, *sceneT, transform_1);
-	*sceneTSum = *scene2 + *sceneT;
+	pcl::transformPointCloud (*scene2, *sceneT, transform_1);
+	*sceneTSum = *scene1 + *sceneT;
 
 	int v2(0);
 	v->createViewPort(0.5, 0.0, 1.0, 1.0, v2);
@@ -254,7 +258,7 @@ int _tmain(int argc, _TCHAR* argv[]){
 
 	//Cargar datos de prueba imagenes
 	Imagen1 = cv::imread("cuadro_1_imagen_grises.jpg",CV_LOAD_IMAGE_GRAYSCALE );
-	Imagen2 = cv::imread("cuadro_5_imagen_grises.jpg",CV_LOAD_IMAGE_GRAYSCALE );
+	Imagen2 = cv::imread("cuadro_2_imagen_grises.jpg",CV_LOAD_IMAGE_GRAYSCALE );
 	if(!Imagen1.data || !Imagen2.data){
 		std::cout << "No se puede leer la imagen \n";
 		return 1;
@@ -266,7 +270,7 @@ int _tmain(int argc, _TCHAR* argv[]){
 	pcl::PointCloud<PointT>::Ptr tmpscene3(new pcl::PointCloud<PointT>);
 
 	if(pcl::io::loadPCDFile<PointT>("cuadro_1_nube.pcd",*tmpscene1) != 0
-		|| pcl::io::loadPCDFile<PointT>("cuadro_5_nube.pcd",*tmpscene2) != 0){
+		|| pcl::io::loadPCDFile<PointT>("cuadro_2_nube.pcd",*tmpscene2) != 0){
 		PCL_ERROR("Problem reading clouds \n");
 		return 1;
 	}
