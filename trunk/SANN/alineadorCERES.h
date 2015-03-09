@@ -27,12 +27,18 @@ public:
 	/***********************************************************************************
 	*	Operador de costo utilizado por CERES
 	*	Tmatrix -> Ingresa como un array de 6 valores:
-	*				Tmatrix[0] -> Traslacion en X
-	*				Tmatrix[1] -> Traslacion en Y
-	*				Tmatrix[2] -> Traslacion en Z
-	*				Tmatrix[3] -> Angulo yaw
-	*				Tmatrix[4] -> Angulo pitch
-	*				Tmatrix[5] -> Angulo roll
+	*				Tmatrix[0] -> Angulo yaw
+	*				Tmatrix[1] -> Angulo pitch
+	*				Tmatrix[2] -> Angulo roll
+	*				Tmatrix[3] -> Traslacion en X
+	*				Tmatrix[4] -> Traslacion en Y
+	*				Tmatrix[5] -> Traslacion en Z
+	*				Tmatrix[6] -> distancia focal X
+	*				Tmatrix[7] -> distancia focal Y
+	*				Tmatrix[8] -> Centro de la imagen en X
+	*				Tmatrix[9] -> Centro de la imagen en Y
+	*				Tmatrix[10] -> K1
+	*				Tmatrix[11] -> K2
 	*
 	*	punto -> Ingresa como un array de 3 valores con XYZ del destino
 	*				punto[0] -> X
@@ -44,99 +50,56 @@ public:
 	************************************************************************************/
 
 	template <typename T>
-	bool operator()(const T* const Tmatrix, const T* const punto, T* residuos) const {
+	bool operator()(const T* const Textrinseca, const T* const Tintrinseca, const T* const punto2D, const T* const punto3D, T* residuos) const {
 		
-		//Establecer las constantes de la calibracion de camaa
-		T fx = T(535.501896);
-		T fy = T(537.504906);
-		T inv_fx = T(1.) / fx;
-		T inv_fy = T(1.) / fy;
-		T cx = T(330.019632);
-		T cy = T(248.201700);
+		//PASO 1. OBTENER LOS PAREMTROS INTRINSECOS DE LA CAMARA
+		const T& focalX = Tintrinseca[0];
+		const T& focalY = Tintrinseca[1];
+		const T& centerX = Tintrinseca[2];
+		const T& centerY = Tintrinseca[3];
+		const T& k1 = Tintrinseca[4];
+		const T& k2 = Tintrinseca[5];
 
-		//Obtener las variables del vector de estado
-		T x = Tmatrix[0];
-		T y = Tmatrix[1];
-		T z = Tmatrix[2];
-		T yaw = Tmatrix[3];
-		T pitch = Tmatrix[4];
-		T roll = Tmatrix[5];
+		//PASO 2. CONVERTIR EL PUNTO 2D DE LA SEGUNDA CAPTURA A 3D
+		T punto2D3D[3];
+		punto2D3D[2] = punto3D[2];
+		punto2D3D[1] = (punto2D[1] - centerY)*(punto3D[2]/focalY);
+		punto2D3D[0] = (punto2D[0] - centerX)*(punto3D[2]/focalX);
 
-		//Calcular parametros utiles
-		T sin_yaw = ceres::sin(yaw);
-		T cos_yaw = ceres::cos(yaw);
-		T sin_pitch = ceres::sin(pitch);
-		T cos_pitch = ceres::cos(pitch);
-		T sin_roll = ceres::sin(roll);
-		T cos_roll = ceres::cos(roll);
+		//Obtener el punto transformado en rotacion y traslacion
+		T transformedPoint3D[3];
+		ceres::AngleAxisRotatePoint(Textrinseca, punto2D3D, transformedPoint3D);
 
-		//Calcular la matriz de transformacion
-		T Rt[4][4];
-		Rt[0][0] = cos_yaw * cos_pitch;
-		Rt[0][1] = cos_yaw * sin_pitch * sin_roll - sin_yaw * cos_roll;
-		Rt[0][2] = cos_yaw * sin_pitch * cos_roll + sin_yaw * sin_roll;
-		Rt[0][3] = x;
-		Rt[1][0] = sin_yaw * cos_pitch;
-		Rt[1][1] = sin_yaw * sin_pitch * sin_roll + cos_yaw * cos_roll;
-		Rt[1][2] = sin_yaw * sin_pitch * cos_roll - cos_yaw * sin_roll;
-		Rt[1][3] = y;
-		Rt[2][0] = -sin_pitch;
-		Rt[2][1] = cos_pitch * sin_roll;
-		Rt[2][2] = cos_pitch * cos_roll;
-		Rt[2][3] = z;
-		Rt[3][0] = T(0.);
-		Rt[3][1] = T(0.);
-		Rt[3][2] = T(0.);
-		Rt[3][3] = T(1.);
+		transformedPoint3D[0] += Textrinseca[3];
+		transformedPoint3D[1] += Textrinseca[4];
+		transformedPoint3D[2] += Textrinseca[5];
 
-		/*
-		std::cout << "\n ************ \n";
-		std::cout << " "<<Rt[0][0]<<"  "<<Rt[0][1]<<"  "<<Rt[0][2]<<"  "<<Rt[0][3]<<"\n";
-		std::cout << " "<<Rt[1][0]<<"  "<<Rt[1][1]<<"  "<<Rt[1][2]<<"  "<<Rt[1][3]<<"\n"; 
-		std::cout << " "<<Rt[2][0]<<"  "<<Rt[2][1]<<"  "<<Rt[2][2]<<"  "<<Rt[2][3]<<"\n"; 
-		std::cout << " "<<Rt[3][0]<<"  "<<Rt[3][1]<<"  "<<Rt[3][2]<<"  "<<Rt[3][3]<<"\n"; 
-		std::cout << "\n ************ \n";
-		*/
+		//Transformar las coordenadas 3D a la imagen 2D
+		// Xcorrected = focalX * (X/Z) + centerX
+		// Ycorrected = focalY * (Y/Z) + centerY
+		
+		T xp = focalX*(transformedPoint3D[0] / transformedPoint3D[2]) + centerX;
+		T yp = focalY*(transformedPoint3D[1] / transformedPoint3D[2]) + centerY;
 
-		//Obtener el punto original
-		T point3D[4];
-		point3D[0] = punto[0];
-		point3D[1] = punto[1];
-		point3D[2] = punto[2];
-		point3D[3] = T(1.0);
-
-		//Obtener el punto transformado
-		T transformedPoint3D[4];
-		transformedPoint3D[0] = Rt[0][0]*point3D[0]+Rt[0][1]*point3D[1]+Rt[0][2]*point3D[2]+Rt[0][3]*point3D[3];
-        transformedPoint3D[1] = Rt[1][0]*point3D[0]+Rt[1][1]*point3D[1]+Rt[1][2]*point3D[2]+Rt[1][3]*point3D[3];
-        transformedPoint3D[2] = Rt[2][0]*point3D[0]+Rt[2][1]*point3D[1]+Rt[2][2]*point3D[2]+Rt[2][3]*point3D[3];
-        transformedPoint3D[3] = Rt[3][0]*point3D[0]+Rt[3][1]*point3D[1]+Rt[3][2]*point3D[2]+Rt[3][3]*point3D[3];
-
-		if(transformedPoint3D[3] != T(0.0)){
-			transformedPoint3D[0] = transformedPoint3D[0] / transformedPoint3D[3];
-			transformedPoint3D[1] = transformedPoint3D[1] / transformedPoint3D[3];
-			transformedPoint3D[2] = transformedPoint3D[2] / transformedPoint3D[3];
-			transformedPoint3D[3] = transformedPoint3D[3] / transformedPoint3D[3];
-		}
+		// Aplicar el primer y segundo parametro de distorcion radial
+		
+		T r2 = xp*xp + yp*yp;
+		T distortion = T(1.0) + r2  * (k1 + k2  * r2);
+		distortion = T(1.0);
+		//Hallar la prediccion
+		T predicted_x = distortion * xp;
+		T predicted_y = distortion * yp;
 
 		//Obtener la distancia residual
-		residuos[0] = ceres::abs(transformedPoint3D[0] - T(P1_x));
-		residuos[1] = ceres::abs(transformedPoint3D[1] - T(P1_y));
-		residuos[2] = ceres::abs(transformedPoint3D[2] - T(P1_z));
-
-		/*
-		std::cout << "\n ************ \n";
-		std::cout << "X: "<<transformedPoint3D[0]<<" Y:"<<transformedPoint3D[1]<<" Z:"<<transformedPoint3D[2]<<" 1:"<<transformedPoint3D[3]<<"\n"; 
-		std::cout << "X: "<<P1_x<<" Y:"<<P1_y<<" Z:"<<P1_z<<"\n"; 
-		std::cout << "X: "<<residuos[0]<<" Y:"<<residuos[1]<<" Z:"<<residuos[2]<<"\n"; 
-		std::cout << "\n ************ \n";
-		*/
+		residuos[0] = P1_x - T(transformedPoint3D[0]);
+		residuos[1] = P1_y - T(transformedPoint3D[1]);
+		residuos[2] = P1_z - T(transformedPoint3D[2]);
 
 		return true;
 	}
 
-	static ceres::CostFunction* Create(const double observed_x, const double observed_y, const double observed_Z) {
-		return (new ceres::AutoDiffCostFunction<alineadorM9, 3, 6, 3>(new alineadorM9(observed_x, observed_y, observed_Z)));
+	static ceres::CostFunction* Create(const double observed_x, const double observed_y, const double observed_z) {
+		return (new ceres::AutoDiffCostFunction<alineadorM9, 3, 6, 6, 2, 3>(new alineadorM9(observed_x, observed_y, observed_z)));
 	}
 
 private:
