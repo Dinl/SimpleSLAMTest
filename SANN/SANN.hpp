@@ -46,14 +46,23 @@ void SANN::Match(cv::Mat &Descriptors1, cv::Mat &Descriptors2, std::vector<cv::D
 	}
 
 	//Proponer vector de cambio
-	for(int i=0; i<15000; i++){
+	for(int i=0; i<150000; i++){
 		float coef = std::exp(-i*coeficiente);
 		proposeRandomPair(coef);
 	}
 
-	//Llenar la matriz de Match
+	//Halla min/max
+	float min = 9999999, max = -9999999;
 	for(int i=0; i < muestrasEntrenamiento; i++)
-		if(Material.at<float>(i,1) != -1 && Material.at<float>(i,2)<0.25)
+		if(Material.at<float>(i,2) < min)
+			min = Material.at<float>(i,2);
+		else if(Material.at<float>(i,2) > max)
+			max = Material.at<float>(i,2);
+
+	//Llenar la matriz de Match
+	float limite = (max-min)*0.2 + min;
+	for(int i=0; i < muestrasEntrenamiento; i++)
+		if(Material.at<float>(i,1) != -1 && Material.at<float>(i,2) <= limite)
 			Matches.push_back(cv::DMatch(Material.at<float>(i,0), Material.at<float>(i,1), 0, Material.at<float>(i,2)));
 
 }
