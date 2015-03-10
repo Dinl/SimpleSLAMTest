@@ -91,9 +91,9 @@ public:
 		T predicted_y = distortion * yp;
 
 		//Obtener la distancia residual
-		residuos[0] = P1_x - T(transformedPoint3D[0]);
-		residuos[1] = P1_y - T(transformedPoint3D[1]);
-		residuos[2] = P1_z - T(transformedPoint3D[2]);
+		residuos[0] = T(P1_x) - transformedPoint3D[0];
+		residuos[1] = T(P1_y) - transformedPoint3D[1];
+		residuos[2] = T(P1_z) - transformedPoint3D[2];
 
 		return true;
 	}

@@ -68,7 +68,7 @@ void MetodoSugerido(cv::Mat &descriptors_scene1, cv::Mat& descriptors_scene2){
 			max = matchesFilter[i].distance;
 
 	//Filtrar
-	float limite = (max-min)*0.2 + min;
+	float limite = (max-min)*0.1 + min;
 	for(int i=0; i < matchesFilter.size(); i++)
 		if(matchesFilter[i].distance <= limite)
 			matches.push_back(matchesFilter[i]);
@@ -202,7 +202,8 @@ void alinearCeres(){
 			*/
 		
 			ceres::CostFunction* cost_function = alineadorM9::Create(C1[0], C1[1], C1[2]);
-			problem.AddResidualBlock(cost_function, NULL, extrinseca, intrinseca, P2, C2);
+			ceres::LossFunction* lost_function = new HuberLoss(1.0);
+			problem.AddResidualBlock(cost_function, lost_function, extrinseca, intrinseca, P2, C2);
 		}
 
 	}
@@ -276,7 +277,7 @@ int _tmain(int argc, _TCHAR* argv[]){
 
 	//Cargar datos de prueba imagenes
 	Imagen1 = cv::imread("cuadro_1_imagen_grises.jpg",CV_LOAD_IMAGE_GRAYSCALE );
-	Imagen2 = cv::imread("cuadro_5_imagen_grises.jpg",CV_LOAD_IMAGE_GRAYSCALE );
+	Imagen2 = cv::imread("cuadro_2_imagen_grises.jpg",CV_LOAD_IMAGE_GRAYSCALE );
 	if(!Imagen1.data || !Imagen2.data){
 		std::cout << "No se puede leer la imagen \n";
 		return 1;
@@ -288,7 +289,7 @@ int _tmain(int argc, _TCHAR* argv[]){
 	pcl::PointCloud<PointT>::Ptr tmpscene3(new pcl::PointCloud<PointT>);
 
 	if(pcl::io::loadPCDFile<PointT>("cuadro_1_nube.pcd",*tmpscene1) != 0
-		|| pcl::io::loadPCDFile<PointT>("cuadro_5_nube.pcd",*tmpscene2) != 0){
+		|| pcl::io::loadPCDFile<PointT>("cuadro_2_nube.pcd",*tmpscene2) != 0){
 		PCL_ERROR("Problem reading clouds \n");
 		return 1;
 	}
@@ -298,8 +299,8 @@ int _tmain(int argc, _TCHAR* argv[]){
 
 	//Crear el objeto SURF
 	int minHessian = 400;
-	//cv::SurfFeatureDetector detector( minHessian );
-	cv::SiftFeatureDetector detector;
+	cv::SurfFeatureDetector detector( minHessian );
+	//cv::SiftFeatureDetector detector;
 	//Calular los keypoints
 	
 	detector.detect( Imagen1, keypoints_scene1 );
