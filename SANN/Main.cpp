@@ -201,11 +201,10 @@ void alinearCeres(){
 			std::cout << "Po: " << C1[0] << " " << C1[1] << " " << C1[2] << " Pd: " << C2[0] << " " << C2[1] << " " << C2[2] << "\n";
 			*/
 		
-			ceres::CostFunction* cost_function = alineadorM9::Create(C1[0], C1[1], C1[2]);
+			ceres::CostFunction* cost_function = alineador2D::Create(P1[0], P1[1]);
 			ceres::LossFunction* lost_function = new HuberLoss(1.0);
 			problem.AddResidualBlock(cost_function, lost_function, extrinseca, intrinseca, P2, C2);
 		}
-
 	}
 
 	ceres::Solver::Options options;
