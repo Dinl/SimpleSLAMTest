@@ -122,7 +122,7 @@ void imprimirMatriz(double *M){
 	std::cout << "\n ************ \n";
 }
 
-void alinearCeres(){
+void alinearCeres2D(){
 
 	//Mostrar la nube transformada
 	boost::shared_ptr<pcl::visualization::PCLVisualizer> v (new pcl::visualization::PCLVisualizer("OpenNI viewer"));
@@ -138,7 +138,7 @@ void alinearCeres(){
 	*scene2 = *cloud_scene2;
 
 	//Realizar alineacion
-	ceres::Problem problem;
+	ceres::Problem problem2D;
 
 	//Crear el vector inicial de transformacion
 	double *extrinseca;
@@ -200,10 +200,10 @@ void alinearCeres(){
 			std::cout << "Po: " << P1[0] << " " << P1[1] << " Pd: " << P2[0] << " " << P2[1] << "\n";
 			std::cout << "Po: " << C1[0] << " " << C1[1] << " " << C1[2] << " Pd: " << C2[0] << " " << C2[1] << " " << C2[2] << "\n";
 			*/
-		
+			
 			ceres::CostFunction* cost_function = alineador2D::Create(P1[0], P1[1]);
 			ceres::LossFunction* lost_function = new HuberLoss(1.0);
-			problem.AddResidualBlock(cost_function, lost_function, extrinseca, intrinseca, P2, C2);
+			problem2D.AddResidualBlock(cost_function, lost_function, extrinseca, intrinseca, P2, C2);
 		}
 	}
 
@@ -216,7 +216,157 @@ void alinearCeres(){
 	options.parameter_tolerance = 1e-16;
 
 	ceres::Solver::Summary summary;
-	ceres::Solve(options, &problem, &summary);
+	ceres::Solve(options, &problem2D, &summary);
+	std::cout << summary.FullReport() << "\n";
+
+	std::cout << extrinseca[0] << " " << extrinseca[1] << " " << extrinseca[2] << " " << extrinseca[3] << " " << extrinseca[4] << " " << extrinseca[5] << "\n";
+	std::cout << intrinseca[0] << " " << intrinseca[1] << " " << intrinseca[2] << " " << intrinseca[3] << " " << intrinseca[4] << " " << intrinseca[5] << "\n";
+	//imprimirMatriz(matriz);
+
+	double R[9];
+	//matriz[2] = 0;
+	ceres::AngleAxisToRotationMatrix(extrinseca,R);
+
+	//alineadorM9::getRotationMatrix(matriz,R);
+
+	//Aplicar la transformacion de la nube
+	
+	Eigen::Matrix4f transform_1 = Eigen::Matrix4f::Identity();
+
+	transform_1 (0,0) = R[0];
+	transform_1 (0,1) = R[3];
+	transform_1 (0,2) = R[6];
+	transform_1 (0,3) = extrinseca[3];
+
+	transform_1 (1,0) = R[1];
+	transform_1 (1,1) = R[4];
+	transform_1 (1,2) = R[7];
+	transform_1 (1,3) = extrinseca[4];
+
+	transform_1 (2,0) = R[2];
+	transform_1 (2,1) = R[5];
+	transform_1 (2,2) = R[8];
+	transform_1 (2,3) = extrinseca[5];
+
+	transform_1 (3,0) = 0;
+	transform_1 (3,1) = 0;
+	transform_1 (3,2) = 0;
+	transform_1 (3,3) = 1;
+	
+	std::cout << transform_1 << "\n";
+
+	pcl::transformPointCloud (*scene1, *sceneT, transform_1);
+	*sceneTSum = *scene1 + *scene2;
+
+	int v2(0);
+	v->setBackgroundColor(0,0,0,v2);
+	v->addPointCloud(sceneTSum, "sample cloud2", v2);
+
+	while(!v->wasStopped()){
+		v->spinOnce (100);
+		boost::this_thread::sleep (boost::posix_time::microseconds (100000));
+	}
+
+
+	std::cout << "transformed \n";
+
+}
+
+void alinearCeres3D(){
+
+	//Mostrar la nube transformada
+	boost::shared_ptr<pcl::visualization::PCLVisualizer> v (new pcl::visualization::PCLVisualizer("OpenNI viewer"));
+
+	//Crear las nubes de puntos originales
+	pcl::PointCloud<PointT>::Ptr scene1(new pcl::PointCloud<PointT>);
+	pcl::PointCloud<PointT>::Ptr scene2(new pcl::PointCloud<PointT>);
+	pcl::PointCloud<PointT>::Ptr sceneSum(new pcl::PointCloud<PointT>);
+	pcl::PointCloud<PointT>::Ptr sceneT(new pcl::PointCloud<PointT>);
+	pcl::PointCloud<PointT>::Ptr sceneTSum(new pcl::PointCloud<PointT>);
+
+	*scene1 = *cloud_scene1;
+	*scene2 = *cloud_scene2;
+
+	//Realizar alineacion
+	ceres::Problem problem3D;
+
+	//Crear el vector inicial de transformacion
+	double *extrinseca;
+	extrinseca = new double[6];
+	extrinseca[0] = 0;
+	extrinseca[1] = 0;
+	extrinseca[2] = 0;
+	extrinseca[3] = 0;
+	extrinseca[4] = 0;
+	extrinseca[5] = 0;
+
+	double *intrinseca;
+	intrinseca = new double[6];
+	intrinseca[0] = 535.501896;	//Fx
+	intrinseca[1] = 537.504906;	//Fy
+	intrinseca[2] = 330.201700;	//CenterX
+	intrinseca[3] = 248.2017;	//CenterY
+	intrinseca[4] = 0.119773;	//K1
+	intrinseca[5] = -0.369037;	//K2
+
+	for(int i=0; i < matches.size(); i++){
+		//Obtener el punto en la imagen original
+		double *P1;
+		P1 = new double[2];
+		P1[0] = keypoints_scene1[matches[i].queryIdx].pt.x;
+		P1[1] = keypoints_scene1[matches[i].queryIdx].pt.y;
+
+		//Obtener el correspondiente punto en la nube
+		double indiceP1 = ((Imagen1.cols * (P1[1]-1)) + P1[0]);		
+		double *C1;
+		C1 = new double[3];
+		C1[0] = cloud_scene1->at(P1[0],P1[1]).x;
+		C1[1] = cloud_scene1->at(P1[0],P1[1]).y;
+		C1[2] = cloud_scene1->at(P1[0],P1[1]).z;
+
+		//Mostrar esferas en el lugar de los keypoints
+		//std::string sphereid = "sphere"+std::to_string(i);
+		//v->addSphere(cloud_scene1->at(P1[0],P1[1]),0.01,255,0,0,sphereid,v1);
+
+		/**********************************************************************/
+		//Obtener el punto en la imagen destino
+		double *P2;
+		P2 = new double[2];
+		P2[0] = keypoints_scene2[matches[i].trainIdx].pt.x;
+		P2[1] = keypoints_scene2[matches[i].trainIdx].pt.y;
+
+		//Obtener el correspondiente punto en la nube
+		double indiceP2 = ((Imagen2.cols * (P2[1]-1)) + P2[0]);		
+		double *C2;
+		C2 = new double[3];
+		C2[0] = cloud_scene2->at(P2[0],P2[1]).x;
+		C2[1] = cloud_scene2->at(P2[0],P2[1]).y;
+		C2[2] = cloud_scene2->at(P2[0],P2[1]).z;
+
+		if(C1[0] == C1[0] && C1[1] == C1[1] && C1[2] == C1[2] && C2[0] == C2[0] && C2[1] == C2[1] && C2[2] == C2[2]){
+			/**Imprimir los 2 puntos espaciales**/
+			/*
+			std::cout<< "punto" << i << " : \n";
+			std::cout << "Po: " << P1[0] << " " << P1[1] << " Pd: " << P2[0] << " " << P2[1] << "\n";
+			std::cout << "Po: " << C1[0] << " " << C1[1] << " " << C1[2] << " Pd: " << C2[0] << " " << C2[1] << " " << C2[2] << "\n";
+			*/
+			
+			ceres::CostFunction* cost_function = alineador3D::Create(C1[0], C1[1], C1[2]);
+			ceres::LossFunction* lost_function = new HuberLoss(1.0);
+			problem3D.AddResidualBlock(cost_function, lost_function, extrinseca, C2);
+		}
+	}
+
+	ceres::Solver::Options options;
+	options.max_num_iterations = 100;				//Por definir
+	options.linear_solver_type = ceres::DENSE_NORMAL_CHOLESKY;
+	options.minimizer_progress_to_stdout = false;
+	options.function_tolerance = 1e-16;
+	options.gradient_tolerance = 1e-32;
+	options.parameter_tolerance = 1e-16;
+
+	ceres::Solver::Summary summary;
+	ceres::Solve(options, &problem3D, &summary);
 	std::cout << summary.FullReport() << "\n";
 
 	std::cout << extrinseca[0] << " " << extrinseca[1] << " " << extrinseca[2] << " " << extrinseca[3] << " " << extrinseca[4] << " " << extrinseca[5] << "\n";
@@ -275,8 +425,8 @@ void alinearCeres(){
 int _tmain(int argc, _TCHAR* argv[]){
 
 	//Cargar datos de prueba imagenes
-	Imagen1 = cv::imread("cuadro_1_imagen_grises.jpg",CV_LOAD_IMAGE_GRAYSCALE );
-	Imagen2 = cv::imread("cuadro_2_imagen_grises.jpg",CV_LOAD_IMAGE_GRAYSCALE );
+	Imagen1 = cv::imread("cuadro_2_imagen_grises.jpg",CV_LOAD_IMAGE_GRAYSCALE );
+	Imagen2 = cv::imread("cuadro_13_imagen_grises.jpg",CV_LOAD_IMAGE_GRAYSCALE );
 	if(!Imagen1.data || !Imagen2.data){
 		std::cout << "No se puede leer la imagen \n";
 		return 1;
@@ -287,8 +437,8 @@ int _tmain(int argc, _TCHAR* argv[]){
 	pcl::PointCloud<PointT>::Ptr tmpscene2(new pcl::PointCloud<PointT>);
 	pcl::PointCloud<PointT>::Ptr tmpscene3(new pcl::PointCloud<PointT>);
 
-	if(pcl::io::loadPCDFile<PointT>("cuadro_1_nube.pcd",*tmpscene1) != 0
-		|| pcl::io::loadPCDFile<PointT>("cuadro_2_nube.pcd",*tmpscene2) != 0){
+	if(pcl::io::loadPCDFile<PointT>("cuadro_2_nube.pcd",*tmpscene1) != 0
+		|| pcl::io::loadPCDFile<PointT>("cuadro_13_nube.pcd",*tmpscene2) != 0){
 		PCL_ERROR("Problem reading clouds \n");
 		return 1;
 	}
@@ -320,7 +470,8 @@ int _tmain(int argc, _TCHAR* argv[]){
 	MetodoSugerido(descriptors_scene1, descriptors_scene2);
 
 	//Realizar alineacion
-	alinearCeres();
+	alinearCeres2D();
+	alinearCeres3D();
 
 	return 0;
 }
