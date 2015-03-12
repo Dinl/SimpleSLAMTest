@@ -32,6 +32,8 @@ std::vector<cv::KeyPoint> keypoints_scene1, keypoints_scene2;
 pcl::PointCloud<PointT>::ConstPtr cloud_scene1, cloud_scene2;
 pcl::PointCloud<PointT>::ConstPtr scene2transformed;
 
+double *extrinseca;
+double *intrinseca;
 
 std::vector< cv::DMatch > matches;
 
@@ -68,7 +70,7 @@ void MetodoSugerido(cv::Mat &descriptors_scene1, cv::Mat& descriptors_scene2){
 			max = matchesFilter[i].distance;
 
 	//Filtrar
-	float limite = (max-min)*0.1 + min;
+	float limite = (max-min)*0.3 + min;
 	for(int i=0; i < matchesFilter.size(); i++)
 		if(matchesFilter[i].distance <= limite)
 			matches.push_back(matchesFilter[i]);
@@ -140,25 +142,7 @@ void alinearCeres2D(){
 	//Realizar alineacion
 	ceres::Problem problem2D;
 
-	//Crear el vector inicial de transformacion
-	double *extrinseca;
-	extrinseca = new double[6];
-	extrinseca[0] = 0;
-	extrinseca[1] = 0;
-	extrinseca[2] = 0;
-	extrinseca[3] = 0;
-	extrinseca[4] = 0;
-	extrinseca[5] = 0;
-
-	double *intrinseca;
-	intrinseca = new double[6];
-	intrinseca[0] = 535.501896;	//Fx
-	intrinseca[1] = 537.504906;	//Fy
-	intrinseca[2] = 330.201700;	//CenterX
-	intrinseca[3] = 248.2017;	//CenterY
-	intrinseca[4] = 0.119773;	//K1
-	intrinseca[5] = -0.369037;	//K2
-
+	
 	for(int i=0; i < matches.size(); i++){
 		//Obtener el punto en la imagen original
 		double *P1;
@@ -194,13 +178,6 @@ void alinearCeres2D(){
 		C2[2] = cloud_scene2->at(P2[0],P2[1]).z;
 
 		if(C1[0] == C1[0] && C1[1] == C1[1] && C1[2] == C1[2] && C2[0] == C2[0] && C2[1] == C2[1] && C2[2] == C2[2]){
-			/**Imprimir los 2 puntos espaciales**/
-			/*
-			std::cout<< "punto" << i << " : \n";
-			std::cout << "Po: " << P1[0] << " " << P1[1] << " Pd: " << P2[0] << " " << P2[1] << "\n";
-			std::cout << "Po: " << C1[0] << " " << C1[1] << " " << C1[2] << " Pd: " << C2[0] << " " << C2[1] << " " << C2[2] << "\n";
-			*/
-			
 			ceres::CostFunction* cost_function = alineador2D::Create(P1[0], P1[1]);
 			ceres::LossFunction* lost_function = new HuberLoss(1.0);
 			problem2D.AddResidualBlock(cost_function, lost_function, extrinseca, intrinseca, P2, C2);
@@ -224,10 +201,7 @@ void alinearCeres2D(){
 	//imprimirMatriz(matriz);
 
 	double R[9];
-	//matriz[2] = 0;
 	ceres::AngleAxisToRotationMatrix(extrinseca,R);
-
-	//alineadorM9::getRotationMatrix(matriz,R);
 
 	//Aplicar la transformacion de la nube
 	
@@ -256,7 +230,7 @@ void alinearCeres2D(){
 	std::cout << transform_1 << "\n";
 
 	pcl::transformPointCloud (*scene1, *sceneT, transform_1);
-	*sceneTSum = *scene1 + *scene2;
+	*sceneTSum = *scene1 + *sceneT;
 
 	int v2(0);
 	v->setBackgroundColor(0,0,0,v2);
@@ -289,25 +263,6 @@ void alinearCeres3D(){
 
 	//Realizar alineacion
 	ceres::Problem problem3D;
-
-	//Crear el vector inicial de transformacion
-	double *extrinseca;
-	extrinseca = new double[6];
-	extrinseca[0] = 0;
-	extrinseca[1] = 0;
-	extrinseca[2] = 0;
-	extrinseca[3] = 0;
-	extrinseca[4] = 0;
-	extrinseca[5] = 0;
-
-	double *intrinseca;
-	intrinseca = new double[6];
-	intrinseca[0] = 535.501896;	//Fx
-	intrinseca[1] = 537.504906;	//Fy
-	intrinseca[2] = 330.201700;	//CenterX
-	intrinseca[3] = 248.2017;	//CenterY
-	intrinseca[4] = 0.119773;	//K1
-	intrinseca[5] = -0.369037;	//K2
 
 	for(int i=0; i < matches.size(); i++){
 		//Obtener el punto en la imagen original
@@ -425,7 +380,7 @@ void alinearCeres3D(){
 int _tmain(int argc, _TCHAR* argv[]){
 
 	//Cargar datos de prueba imagenes
-	Imagen1 = cv::imread("cuadro_2_imagen_grises.jpg",CV_LOAD_IMAGE_GRAYSCALE );
+	Imagen1 = cv::imread("cuadro_5_imagen_grises.jpg",CV_LOAD_IMAGE_GRAYSCALE );
 	Imagen2 = cv::imread("cuadro_13_imagen_grises.jpg",CV_LOAD_IMAGE_GRAYSCALE );
 	if(!Imagen1.data || !Imagen2.data){
 		std::cout << "No se puede leer la imagen \n";
@@ -437,7 +392,7 @@ int _tmain(int argc, _TCHAR* argv[]){
 	pcl::PointCloud<PointT>::Ptr tmpscene2(new pcl::PointCloud<PointT>);
 	pcl::PointCloud<PointT>::Ptr tmpscene3(new pcl::PointCloud<PointT>);
 
-	if(pcl::io::loadPCDFile<PointT>("cuadro_2_nube.pcd",*tmpscene1) != 0
+	if(pcl::io::loadPCDFile<PointT>("cuadro_5_nube.pcd",*tmpscene1) != 0
 		|| pcl::io::loadPCDFile<PointT>("cuadro_13_nube.pcd",*tmpscene2) != 0){
 		PCL_ERROR("Problem reading clouds \n");
 		return 1;
@@ -463,6 +418,24 @@ int _tmain(int argc, _TCHAR* argv[]){
 	extractor.compute( Imagen1, keypoints_scene1, descriptors_scene1);
 	extractor.compute( Imagen2, keypoints_scene2, descriptors_scene2);
 
+	//Inicalizar las matrices
+	//Crear el vector inicial de transformacion	
+	extrinseca = new double[6];
+	extrinseca[0] = 0;
+	extrinseca[1] = 0;
+	extrinseca[2] = 0;
+	extrinseca[3] = 0;
+	extrinseca[4] = 0;
+	extrinseca[5] = 0;
+
+	intrinseca = new double[6];
+	intrinseca[0] = 535.501896;	//Fx
+	intrinseca[1] = 537.504906;	//Fy
+	intrinseca[2] = 330.201700;	//CenterX
+	intrinseca[3] = 248.2017;	//CenterY
+	intrinseca[4] = 0.119773;	//K1
+	intrinseca[5] = -0.369037;	//K2
+
 	//Metodo match PROPUESTO
 	//MetodoPropuesto(descriptors_scene1, descriptors_scene2);
 
@@ -470,8 +443,8 @@ int _tmain(int argc, _TCHAR* argv[]){
 	MetodoSugerido(descriptors_scene1, descriptors_scene2);
 
 	//Realizar alineacion
-	alinearCeres2D();
 	alinearCeres3D();
+	//alinearCeres2D();
 
 	return 0;
 }
