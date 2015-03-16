@@ -54,13 +54,7 @@ void MetodoPropuesto(cv::Mat &descriptors_scene1, cv::Mat& descriptors_scene2){
 	cv::waitKey(0);
 }
 
-void MetodoSugerido(cv::Mat &descriptors_scene1, cv::Mat& descriptors_scene2){
-	cv::FlannBasedMatcher matcher;
-	std::vector< cv::DMatch > matchesFilter;
-
-	matcher.match( descriptors_scene1, descriptors_scene2, matchesFilter );
-
-	
+void limitFilter(std::vector< cv::DMatch > matchesFilter){
 	//Halla min/max
 	float min = 9999999, max = -9999999;
 	for(int i=0; i < matchesFilter.size(); i++)
@@ -69,12 +63,82 @@ void MetodoSugerido(cv::Mat &descriptors_scene1, cv::Mat& descriptors_scene2){
 		else if(matchesFilter[i].distance > max)
 			max = matchesFilter[i].distance;
 
-	//Filtrar
+	//Filtrar por limite
 	float limite = (max-min)*0.3 + min;
 	for(int i=0; i < matchesFilter.size(); i++)
 		if(matchesFilter[i].distance <= limite)
 			matches.push_back(matchesFilter[i]);
-	
+}
+
+void randomFilter(std::vector< cv::DMatch > matchesFilter){
+	srand (time(NULL));
+
+	int matchesSize = matchesFilter.size() * 0.3;
+	for(int i=0; i < matchesSize; i++){
+		int index = rand() % matchesSize;
+			matches.push_back(matchesFilter[index]);
+	}
+}
+
+void anguloFilter(std::vector< cv::DMatch > &matchesFilter){
+	//Hallar todos los angulos
+	std::vector<float> angulos;
+	for(int i=0; i < matchesFilter.size(); i++){
+		//Obtener el punto en la imagen original
+		double *P1;
+		P1 = new double[2];
+		P1[0] = keypoints_scene1[matchesFilter[i].queryIdx].pt.x;
+		P1[1] = keypoints_scene1[matchesFilter[i].queryIdx].pt.y;
+
+		//Obtener el punto en la imagen destino
+		double *P2;
+		P2 = new double[2];
+		P2[0] = keypoints_scene2[matchesFilter[i].trainIdx].pt.x;
+		P2[1] = keypoints_scene2[matchesFilter[i].trainIdx].pt.y;
+
+		double dx = P2[0]-P1[0];
+		double dy = P2[1]-P1[1];
+		float tangente = std::abs(dy/dx);
+
+		/*
+		if(tangente < 0)
+			tangente = tangente + 3.14159265;
+			*/
+
+		//std::cout << "P1: " << P1[0] << " " << P1[1] << " P2: " << P2[0] << " " << P2[1] << " A: " << tangente <<"\n";
+
+		angulos.push_back(tangente);
+
+	}
+
+	//Hallar el promedio de todos los angulos
+	float anguloPromedio = 0;
+	for(int i=0; i < matchesFilter.size(); i++){
+		anguloPromedio += std::abs(angulos[i]);
+	}
+	anguloPromedio = anguloPromedio/matchesFilter.size();
+
+	//filtrar los que esten en la direccion del angulo correcto
+	std::vector< cv::DMatch > matchesAngleFilter;
+	for(int i=0; i < matchesFilter.size(); i++){
+		if(std::abs(angulos[i]) < 0.07){
+			matchesAngleFilter.push_back(matchesFilter[i]);
+		}
+	}
+
+	matchesAngleFilter.swap(matchesFilter);
+}
+
+void MetodoSugerido(cv::Mat &descriptors_scene1, cv::Mat& descriptors_scene2){
+	cv::FlannBasedMatcher matcher;
+	std::vector< cv::DMatch > matchesFilter;
+
+	matcher.match( descriptors_scene1, descriptors_scene2, matchesFilter );
+	anguloFilter(matchesFilter);
+	//limitFilter(matchesFilter);
+	randomFilter(matchesFilter);
+
+
 	cv::Mat img_matches1;
 	cv::drawMatches( Imagen1, keypoints_scene1, Imagen2, keypoints_scene2,
                matches, img_matches1, cv::Scalar::all(-1), cv::Scalar::all(-1),
@@ -380,8 +444,8 @@ void alinearCeres3D(){
 int _tmain(int argc, _TCHAR* argv[]){
 
 	//Cargar datos de prueba imagenes
-	Imagen1 = cv::imread("cuadro_5_imagen_grises.jpg",CV_LOAD_IMAGE_GRAYSCALE );
-	Imagen2 = cv::imread("cuadro_13_imagen_grises.jpg",CV_LOAD_IMAGE_GRAYSCALE );
+	Imagen1 = cv::imread("cuadro_1_imagen_grises.jpg",CV_LOAD_IMAGE_GRAYSCALE );
+	Imagen2 = cv::imread("cuadro_2_imagen_grises.jpg",CV_LOAD_IMAGE_GRAYSCALE );
 	if(!Imagen1.data || !Imagen2.data){
 		std::cout << "No se puede leer la imagen \n";
 		return 1;
@@ -392,8 +456,8 @@ int _tmain(int argc, _TCHAR* argv[]){
 	pcl::PointCloud<PointT>::Ptr tmpscene2(new pcl::PointCloud<PointT>);
 	pcl::PointCloud<PointT>::Ptr tmpscene3(new pcl::PointCloud<PointT>);
 
-	if(pcl::io::loadPCDFile<PointT>("cuadro_5_nube.pcd",*tmpscene1) != 0
-		|| pcl::io::loadPCDFile<PointT>("cuadro_13_nube.pcd",*tmpscene2) != 0){
+	if(pcl::io::loadPCDFile<PointT>("cuadro_1_nube.pcd",*tmpscene1) != 0
+		|| pcl::io::loadPCDFile<PointT>("cuadro_2_nube.pcd",*tmpscene2) != 0){
 		PCL_ERROR("Problem reading clouds \n");
 		return 1;
 	}
