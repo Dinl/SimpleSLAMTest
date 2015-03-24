@@ -18,6 +18,7 @@
 #include <pcl/console/print.h>
 #include <pcl/filters/filter.h>
 #include <pcl/common/transforms.h>
+#include <pcl/features/integral_image_normal.h>
 
 #include "SANN.hpp";
 #include "alineadorCERES.h";
@@ -26,10 +27,14 @@
 typedef pcl::PointXYZRGBA PointT;
 typedef pcl::PointCloud<PointT> PointCloudT;
 
+typedef pcl::Normal NormalPointT;
+typedef pcl::PointCloud<NormalPointT> NormalPointCloudT;
+
 //Variables globales
 cv::Mat Imagen1, Imagen2;
 std::vector<cv::KeyPoint> keypoints_scene1, keypoints_scene2;
 pcl::PointCloud<PointT>::ConstPtr cloud_scene1, cloud_scene2;
+NormalPointCloudT::ConstPtr normal_scene1, normal_scene2;
 pcl::PointCloud<PointT>::ConstPtr scene2transformed;
 
 double *extrinseca;
@@ -73,9 +78,9 @@ void limitFilter(std::vector< cv::DMatch > matchesFilter){
 void randomFilter(std::vector< cv::DMatch > matchesFilter){
 	srand (time(NULL));
 
-	int matchesSize = matchesFilter.size() * 0.3;
+	int matchesSize = matchesFilter.size() * 0.8;
 	for(int i=0; i < matchesSize; i++){
-		int index = rand() % matchesSize;
+		int index = i;
 			matches.push_back(matchesFilter[index]);
 	}
 }
@@ -318,12 +323,26 @@ void alinearCeres3D(){
 	//Crear las nubes de puntos originales
 	pcl::PointCloud<PointT>::Ptr scene1(new pcl::PointCloud<PointT>);
 	pcl::PointCloud<PointT>::Ptr scene2(new pcl::PointCloud<PointT>);
+	PointCloudT::Ptr normal_cloud_scene1(new PointCloudT);
+	PointCloudT::Ptr normal_cloud_scene2(new PointCloudT);
 	pcl::PointCloud<PointT>::Ptr sceneSum(new pcl::PointCloud<PointT>);
 	pcl::PointCloud<PointT>::Ptr sceneT(new pcl::PointCloud<PointT>);
 	pcl::PointCloud<PointT>::Ptr sceneTSum(new pcl::PointCloud<PointT>);
 
 	*scene1 = *cloud_scene1;
 	*scene2 = *cloud_scene2;
+
+	//Realizar la estimacion de normales
+	*normal_scene1 = *normal_cloud_scene1;
+	*normal_scene2 = *normal_cloud_scene2;
+
+	pcl::IntegralImageNormalEstimation<PointT, NormalPointT> ne;
+	ne.setNormalEstimationMethod (ne.AVERAGE_3D_GRADIENT);
+    ne.setMaxDepthChangeFactor(0.02f);
+    ne.setNormalSmoothingSize(10.0f);
+    ne.setInputCloud(scene1);
+    ne.compute(*normal_scene1);
+
 
 	//Realizar alineacion
 	ceres::Problem problem3D;
@@ -444,8 +463,8 @@ void alinearCeres3D(){
 int _tmain(int argc, _TCHAR* argv[]){
 
 	//Cargar datos de prueba imagenes
-	Imagen1 = cv::imread("cuadro_1_imagen_grises.jpg",CV_LOAD_IMAGE_GRAYSCALE );
-	Imagen2 = cv::imread("cuadro_2_imagen_grises.jpg",CV_LOAD_IMAGE_GRAYSCALE );
+	Imagen1 = cv::imread("cuadro_2_imagen_grises.jpg",CV_LOAD_IMAGE_GRAYSCALE );
+	Imagen2 = cv::imread("cuadro_5_imagen_grises.jpg",CV_LOAD_IMAGE_GRAYSCALE );
 	if(!Imagen1.data || !Imagen2.data){
 		std::cout << "No se puede leer la imagen \n";
 		return 1;
@@ -456,8 +475,8 @@ int _tmain(int argc, _TCHAR* argv[]){
 	pcl::PointCloud<PointT>::Ptr tmpscene2(new pcl::PointCloud<PointT>);
 	pcl::PointCloud<PointT>::Ptr tmpscene3(new pcl::PointCloud<PointT>);
 
-	if(pcl::io::loadPCDFile<PointT>("cuadro_1_nube.pcd",*tmpscene1) != 0
-		|| pcl::io::loadPCDFile<PointT>("cuadro_2_nube.pcd",*tmpscene2) != 0){
+	if(pcl::io::loadPCDFile<PointT>("cuadro_2_nube.pcd",*tmpscene1) != 0
+		|| pcl::io::loadPCDFile<PointT>("cuadro_5_nube.pcd",*tmpscene2) != 0){
 		PCL_ERROR("Problem reading clouds \n");
 		return 1;
 	}
