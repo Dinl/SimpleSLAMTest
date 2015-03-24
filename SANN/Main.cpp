@@ -18,7 +18,7 @@
 #include <pcl/console/print.h>
 #include <pcl/filters/filter.h>
 #include <pcl/common/transforms.h>
-#include <pcl/features/integral_image_normal.h>
+#include <pcl/features/normal_3d.h>
 
 #include "SANN.hpp";
 #include "alineadorCERES.h";
@@ -323,8 +323,8 @@ void alinearCeres3D(){
 	//Crear las nubes de puntos originales
 	pcl::PointCloud<PointT>::Ptr scene1(new pcl::PointCloud<PointT>);
 	pcl::PointCloud<PointT>::Ptr scene2(new pcl::PointCloud<PointT>);
-	PointCloudT::Ptr normal_cloud_scene1(new PointCloudT);
-	PointCloudT::Ptr normal_cloud_scene2(new PointCloudT);
+	NormalPointCloudT::Ptr normal_cloud_scene1(new NormalPointCloudT);
+	NormalPointCloudT::Ptr normal_cloud_scene2(new NormalPointCloudT);
 	pcl::PointCloud<PointT>::Ptr sceneSum(new pcl::PointCloud<PointT>);
 	pcl::PointCloud<PointT>::Ptr sceneT(new pcl::PointCloud<PointT>);
 	pcl::PointCloud<PointT>::Ptr sceneTSum(new pcl::PointCloud<PointT>);
@@ -332,17 +332,23 @@ void alinearCeres3D(){
 	*scene1 = *cloud_scene1;
 	*scene2 = *cloud_scene2;
 
+	pcl::NormalEstimation<PointT, NormalPointT> ne1;
+	pcl::search::KdTree<PointT>::Ptr tree1 (new pcl::search::KdTree<PointT> ());
+	ne1.setSearchMethod(tree1);
+    ne1.setRadiusSearch (0.03f);
+    ne1.setInputCloud(scene1);
+    ne1.compute(*normal_cloud_scene1);
+
+	pcl::NormalEstimation<PointT, NormalPointT> ne2;
+	pcl::search::KdTree<PointT>::Ptr tree2 (new pcl::search::KdTree<PointT> ());
+	ne2.setSearchMethod(tree2);
+    ne2.setRadiusSearch (0.03f);
+    ne2.setInputCloud(scene2);
+    ne2.compute(*normal_cloud_scene2);
+
 	//Realizar la estimacion de normales
-	*normal_scene1 = *normal_cloud_scene1;
-	*normal_scene2 = *normal_cloud_scene2;
-
-	pcl::IntegralImageNormalEstimation<PointT, NormalPointT> ne;
-	ne.setNormalEstimationMethod (ne.AVERAGE_3D_GRADIENT);
-    ne.setMaxDepthChangeFactor(0.02f);
-    ne.setNormalSmoothingSize(10.0f);
-    ne.setInputCloud(scene1);
-    ne.compute(*normal_scene1);
-
+	normal_scene1 = normal_cloud_scene1;
+	normal_scene2 = normal_cloud_scene2;
 
 	//Realizar alineacion
 	ceres::Problem problem3D;
