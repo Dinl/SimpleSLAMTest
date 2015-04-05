@@ -60,7 +60,7 @@ void MetodoPropuesto(cv::Mat &descriptors_scene1, cv::Mat& descriptors_scene2){
 }
 
 void limitFilter(std::vector< cv::DMatch > matchesFilter){
-	//Halla min/max
+	//Halla min/max de las distancias
 	float min = 9999999, max = -9999999;
 	for(int i=0; i < matchesFilter.size(); i++)
 		if(matchesFilter[i].distance < min)
@@ -78,10 +78,10 @@ void limitFilter(std::vector< cv::DMatch > matchesFilter){
 void randomFilter(std::vector< cv::DMatch > matchesFilter){
 	srand (time(NULL));
 
-	int matchesSize = matchesFilter.size() * 0.8;
+	int matchesSize = matchesFilter.size() * 0.9;
 	for(int i=0; i < matchesSize; i++){
 		int index = i;
-			matches.push_back(matchesFilter[index]);
+		matches.push_back(matchesFilter[index]);
 	}
 }
 
@@ -323,32 +323,12 @@ void alinearCeres3D(){
 	//Crear las nubes de puntos originales
 	pcl::PointCloud<PointT>::Ptr scene1(new pcl::PointCloud<PointT>);
 	pcl::PointCloud<PointT>::Ptr scene2(new pcl::PointCloud<PointT>);
-	NormalPointCloudT::Ptr normal_cloud_scene1(new NormalPointCloudT);
-	NormalPointCloudT::Ptr normal_cloud_scene2(new NormalPointCloudT);
 	pcl::PointCloud<PointT>::Ptr sceneSum(new pcl::PointCloud<PointT>);
 	pcl::PointCloud<PointT>::Ptr sceneT(new pcl::PointCloud<PointT>);
 	pcl::PointCloud<PointT>::Ptr sceneTSum(new pcl::PointCloud<PointT>);
 
 	*scene1 = *cloud_scene1;
 	*scene2 = *cloud_scene2;
-
-	pcl::NormalEstimation<PointT, NormalPointT> ne1;
-	pcl::search::KdTree<PointT>::Ptr tree1 (new pcl::search::KdTree<PointT> ());
-	ne1.setSearchMethod(tree1);
-    ne1.setRadiusSearch (0.03f);
-    ne1.setInputCloud(scene1);
-    ne1.compute(*normal_cloud_scene1);
-
-	pcl::NormalEstimation<PointT, NormalPointT> ne2;
-	pcl::search::KdTree<PointT>::Ptr tree2 (new pcl::search::KdTree<PointT> ());
-	ne2.setSearchMethod(tree2);
-    ne2.setRadiusSearch (0.03f);
-    ne2.setInputCloud(scene2);
-    ne2.compute(*normal_cloud_scene2);
-
-	//Realizar la estimacion de normales
-	normal_scene1 = normal_cloud_scene1;
-	normal_scene2 = normal_cloud_scene2;
 
 	//Realizar alineacion
 	ceres::Problem problem3D;
@@ -387,17 +367,11 @@ void alinearCeres3D(){
 		C2[1] = cloud_scene2->at(P2[0],P2[1]).y;
 		C2[2] = cloud_scene2->at(P2[0],P2[1]).z;
 
+		//Verificar que los 2 puntos XYZ no sean QNAN o NAN
 		if(C1[0] == C1[0] && C1[1] == C1[1] && C1[2] == C1[2] && C2[0] == C2[0] && C2[1] == C2[1] && C2[2] == C2[2]){
-			/**Imprimir los 2 puntos espaciales**/
-			/*
-			std::cout<< "punto" << i << " : \n";
-			std::cout << "Po: " << P1[0] << " " << P1[1] << " Pd: " << P2[0] << " " << P2[1] << "\n";
-			std::cout << "Po: " << C1[0] << " " << C1[1] << " " << C1[2] << " Pd: " << C2[0] << " " << C2[1] << " " << C2[2] << "\n";
-			*/
-			
-			ceres::CostFunction* cost_function = alineador3D::Create(C1[0], C1[1], C1[2]);
+			ceres::CostFunction* cost_function = alineador3D::Create(C1[0], C1[1], C1[2], C2[0], C2[1], C2[2]);
 			ceres::LossFunction* lost_function = new HuberLoss(1.0);
-			problem3D.AddResidualBlock(cost_function, lost_function, extrinseca, C2);
+			problem3D.AddResidualBlock(cost_function, lost_function, extrinseca);
 		}
 	}
 
@@ -469,8 +443,8 @@ void alinearCeres3D(){
 int _tmain(int argc, _TCHAR* argv[]){
 
 	//Cargar datos de prueba imagenes
-	Imagen1 = cv::imread("cuadro_2_imagen_grises.jpg",CV_LOAD_IMAGE_GRAYSCALE );
-	Imagen2 = cv::imread("cuadro_5_imagen_grises.jpg",CV_LOAD_IMAGE_GRAYSCALE );
+	Imagen1 = cv::imread("cuadro_5_imagen_grises.jpg",CV_LOAD_IMAGE_GRAYSCALE );
+	Imagen2 = cv::imread("cuadro_13_imagen_grises.jpg",CV_LOAD_IMAGE_GRAYSCALE );
 	if(!Imagen1.data || !Imagen2.data){
 		std::cout << "No se puede leer la imagen \n";
 		return 1;
@@ -481,8 +455,8 @@ int _tmain(int argc, _TCHAR* argv[]){
 	pcl::PointCloud<PointT>::Ptr tmpscene2(new pcl::PointCloud<PointT>);
 	pcl::PointCloud<PointT>::Ptr tmpscene3(new pcl::PointCloud<PointT>);
 
-	if(pcl::io::loadPCDFile<PointT>("cuadro_2_nube.pcd",*tmpscene1) != 0
-		|| pcl::io::loadPCDFile<PointT>("cuadro_5_nube.pcd",*tmpscene2) != 0){
+	if(pcl::io::loadPCDFile<PointT>("cuadro_5_nube.pcd",*tmpscene1) != 0
+		|| pcl::io::loadPCDFile<PointT>("cuadro_13_nube.pcd",*tmpscene2) != 0){
 		PCL_ERROR("Problem reading clouds \n");
 		return 1;
 	}
@@ -500,8 +474,8 @@ int _tmain(int argc, _TCHAR* argv[]){
 	detector.detect( Imagen2, keypoints_scene2 );
 	
 	//Calular los descriptores
-	//cv::SurfDescriptorExtractor extractor;
-	cv::SiftDescriptorExtractor extractor;
+	cv::SurfDescriptorExtractor extractor;
+	//cv::SiftDescriptorExtractor extractor;
 	cv::Mat descriptors_scene1, descriptors_scene2;
 
 	extractor.compute( Imagen1, keypoints_scene1, descriptors_scene1);

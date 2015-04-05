@@ -112,10 +112,14 @@ public:
 	*	Constructor:
 	*	Se crea con el punto XYZ de la primera nube 
 	***********************************************************************************/
-	alineador3D(double original_x, double original_y, double original_z){
+	alineador3D(double original_x, double original_y, double original_z, double target_x, double target_y, double target_z){
 		P1_x = original_x;
 		P1_y = original_y;
 		P1_z = original_z;
+
+		P2_x = target_x;
+		P2_y = target_y;
+		P2_z = target_z;
 	};
 
 	/***********************************************************************************
@@ -132,11 +136,17 @@ public:
 	*	residuo = original - transformedPunto2d
 	***********************************************************************************/
 	template <typename T>
-	bool operator()(const T* const Textrinseca, const T* const punto3D, T* residuos) const {
+	bool operator()(const T* const Textrinseca, T* residuos) const {
 		
+		//Convertir el punto3D objtivo a array
+		T puntoObjetivo[3];
+		puntoObjetivo[0] = T(P2_x);
+		puntoObjetivo[1] = T(P2_y);
+		puntoObjetivo[2] = T(P2_z);
+
 		//Obtener el punto transformado en rotacion y traslacion
 		T transformedPoint3D[3];
-		ceres::AngleAxisRotatePoint(Textrinseca, punto3D, transformedPoint3D);
+		ceres::AngleAxisRotatePoint(Textrinseca, puntoObjetivo, transformedPoint3D);
 
 		transformedPoint3D[0] += Textrinseca[3];
 		transformedPoint3D[1] += Textrinseca[4];
@@ -150,12 +160,14 @@ public:
 		return true;
 	}
 
-	static ceres::CostFunction* Create(const double observed_x, const double observed_y, const double observed_z) {
-		return (new ceres::AutoDiffCostFunction<alineador3D, 3, 6, 3>(new alineador3D(observed_x, observed_y, observed_z)));
+	static ceres::CostFunction* Create(const double observed_x, const double observed_y, const double observed_z,
+										const double target_x, const double target_y, const double target_z) {
+		return (new ceres::AutoDiffCostFunction<alineador3D, 3, 6>(new alineador3D(observed_x, observed_y, observed_z, target_x, target_y, target_z)));
 	}
 
 private:
 	double P1_x, P1_y, P1_z;
+	double P2_x, P2_y, P2_z;
 };
 
 
